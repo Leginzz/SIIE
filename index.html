@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SIIE | Tránsito de Tuxpan</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="css/styles.css" rel="stylesheet">
+  </head>
+  <body>
+    <main id="loginView" class="login-shell">
+      <section class="login-panel shadow-lg">
+        <div class="brand-lockup">
+          <span class="brand-mark"><i class="bi bi-shield-check"></i></span>
+          <div>
+            <p class="text-uppercase small text-muted mb-1">Tránsito Municipal de Tuxpan</p>
+            <h1>SIIE</h1>
+          </div>
+        </div>
+        <p class="lead mb-4">Sistema Integral de Infracciones Electrónicas</p>
+        <form id="loginForm" class="vstack gap-3">
+          <div>
+            <label for="loginUser" class="form-label">Usuario</label>
+            <input id="loginUser" class="form-control form-control-lg" autocomplete="username" value="admin@siie.local" required>
+          </div>
+          <div>
+            <label for="loginPassword" class="form-label">Contraseña</label>
+            <input id="loginPassword" type="password" class="form-control form-control-lg" autocomplete="current-password" value="admin123" required>
+          </div>
+          <button class="btn btn-primary btn-lg" type="submit">
+            <i class="bi bi-box-arrow-in-right me-2"></i>Ingresar
+          </button>
+          <div class="alert alert-light border mb-0 small">
+            Demo local: <strong>admin@siie.local</strong> / <strong>admin123</strong>. Al configurar Firebase, el prototipo usa Firestore para infracciones, pagos, garantías, reportes y usuarios.
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <div id="appView" class="app-shell d-none">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <span class="brand-mark"><i class="bi bi-shield-check"></i></span>
+          <div>
+            <strong>SIIE</strong>
+            <small>Tránsito de Tuxpan</small>
+          </div>
+        </div>
+        <nav class="nav flex-column gap-1" id="mainNav">
+          <button class="nav-link active" data-section="dashboard"><i class="bi bi-speedometer2"></i><span>Dashboard</span></button>
+          <button class="nav-link" data-section="captura"><i class="bi bi-pencil-square"></i><span>Captura</span></button>
+          <button class="nav-link" data-section="folios"><i class="bi bi-qr-code"></i><span>Folios y QR</span></button>
+          <button class="nav-link" data-section="caja"><i class="bi bi-cash-coin"></i><span>Caja</span></button>
+          <button class="nav-link" data-section="pagos"><i class="bi bi-receipt"></i><span>Pagos</span></button>
+          <button class="nav-link" data-section="garantias"><i class="bi bi-key"></i><span>Garantías</span></button>
+          <button class="nav-link" data-section="reportes"><i class="bi bi-bar-chart-line"></i><span>Reportes</span></button>
+        </nav>
+        <button id="logoutBtn" class="btn btn-outline-light w-100 mt-auto"><i class="bi bi-power me-2"></i>Salir</button>
+      </aside>
+
+      <section class="content-shell">
+        <header class="topbar">
+          <button id="menuBtn" class="btn btn-outline-secondary d-lg-none" aria-label="Abrir menu"><i class="bi bi-list"></i></button>
+          <div>
+            <p class="text-muted small mb-0">Prototipo operativo</p>
+            <h2 id="sectionTitle" class="mb-0">Dashboard</h2>
+          </div>
+          <div class="ms-auto text-end">
+            <span id="firebaseBadge" class="badge rounded-pill text-bg-warning">Modo demo</span>
+            <p id="currentUser" class="small text-muted mb-0 mt-1"></p>
+          </div>
+        </header>
+
+        <section id="dashboard" class="section-view active">
+          <div class="metric-grid">
+            <article class="metric-card">
+              <span><i class="bi bi-journal-check"></i></span>
+              <div><p>Infracciones</p><strong id="metricInfracciones">0</strong></div>
+            </article>
+            <article class="metric-card">
+              <span><i class="bi bi-hourglass-split"></i></span>
+              <div><p>Pendientes</p><strong id="metricPendientes">0</strong></div>
+            </article>
+            <article class="metric-card">
+              <span><i class="bi bi-wallet2"></i></span>
+              <div><p>Recaudado</p><strong id="metricRecaudado">$0.00</strong></div>
+            </article>
+            <article class="metric-card">
+              <span><i class="bi bi-key-fill"></i></span>
+              <div><p>Garantías activas</p><strong id="metricGarantias">0</strong></div>
+            </article>
+          </div>
+          <div class="row g-3">
+            <div class="col-xl-7">
+              <div class="panel">
+                <div class="panel-heading">
+                  <h3>Actividad reciente</h3>
+                </div>
+                <div class="table-responsive">
+                  <table class="table align-middle">
+                    <thead><tr><th>Folio</th><th>Conductor</th><th>Estado</th><th>Total</th></tr></thead>
+                    <tbody id="recentTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="col-xl-5">
+              <div class="panel">
+                <div class="panel-heading">
+                  <h3>Flujo de atención</h3>
+                </div>
+                <ol class="timeline">
+                  <li><strong>Captura</strong><span>Agente registra datos, motivo, ubicación y evidencia.</span></li>
+                  <li><strong>Folio y QR</strong><span>El sistema genera identificador verificable.</span></li>
+                  <li><strong>Caja</strong><span>Consulta adeudo, aplica descuento o registra pago.</span></li>
+                  <li><strong>Garantía</strong><span>Entrega o retención documentada.</span></li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="captura" class="section-view">
+          <form id="infractionForm" class="panel">
+            <div class="panel-heading">
+              <h3>Nueva infracción</h3>
+              <button class="btn btn-primary" type="submit"><i class="bi bi-save me-2"></i>Guardar</button>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">Nombre del conductor</label>
+                <input name="conductor" class="form-control" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Licencia</label>
+                <input name="licencia" class="form-control">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Placas</label>
+                <input name="placas" class="form-control text-uppercase" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Vehículo</label>
+                <input name="vehiculo" class="form-control" placeholder="Marca, línea, color">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Motivo</label>
+                <select name="motivo" class="form-select" required>
+                  <option value="">Seleccionar</option>
+                  <option>Estacionarse en lugar prohibido</option>
+                  <option>No respetar semáforo</option>
+                  <option>Falta de licencia</option>
+                  <option>Exceso de velocidad</option>
+                  <option>Conducir usando teléfono</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Monto</label>
+                <input name="monto" type="number" min="0" step="0.01" class="form-control" value="850" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Agente</label>
+                <input name="agente" class="form-control" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Garantía retenida</label>
+                <select name="garantia" class="form-select">
+                  <option value="Ninguna">Ninguna</option>
+                  <option>Licencia</option>
+                  <option>Tarjeta de circulación</option>
+                  <option>Placa</option>
+                  <option>Vehículo</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Ubicación</label>
+                <input name="ubicacion" class="form-control" placeholder="Calle, colonia o referencia">
+              </div>
+              <div class="col-12">
+                <label class="form-label">Observaciones</label>
+                <textarea name="observaciones" class="form-control" rows="3"></textarea>
+              </div>
+            </div>
+          </form>
+        </section>
+
+        <section id="folios" class="section-view">
+          <div class="row g-3">
+            <div class="col-lg-7">
+              <div class="panel">
+                <div class="panel-heading"><h3>Folios generados</h3></div>
+                <div class="table-responsive">
+                  <table class="table align-middle">
+                    <thead><tr><th>Folio</th><th>Placas</th><th>Fecha</th><th>QR</th></tr></thead>
+                    <tbody id="folioTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-5">
+              <div class="panel qr-panel">
+                <div class="panel-heading"><h3>Verificación QR</h3></div>
+                <div id="qrBox" class="qr-box"></div>
+                <p id="qrHelp" class="text-muted mb-0">Selecciona un folio para ver su código QR.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="caja" class="section-view">
+          <div class="panel">
+            <div class="panel-heading">
+              <h3>Módulo de caja</h3>
+              <div class="input-group search-box">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input id="cashSearch" class="form-control" placeholder="Buscar por folio, placas o conductor">
+              </div>
+            </div>
+            <div class="row g-3" id="cashCards"></div>
+          </div>
+        </section>
+
+        <section id="pagos" class="section-view">
+          <div class="panel">
+            <div class="panel-heading"><h3>Registro de pagos</h3></div>
+            <div class="table-responsive">
+              <table class="table align-middle">
+                <thead><tr><th>Recibo</th><th>Folio</th><th>Método</th><th>Importe</th><th>Fecha</th></tr></thead>
+                <tbody id="paymentsTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="garantias" class="section-view">
+          <div class="panel">
+            <div class="panel-heading"><h3>Control de garantías</h3></div>
+            <div class="table-responsive">
+              <table class="table align-middle">
+                <thead><tr><th>Folio</th><th>Garantía</th><th>Conductor</th><th>Estado</th><th>Acción</th></tr></thead>
+                <tbody id="warrantyTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="reportes" class="section-view">
+          <div class="row g-3">
+            <div class="col-lg-4">
+              <div class="panel h-100">
+                <div class="panel-heading"><h3>Resumen</h3></div>
+                <dl class="report-list">
+                  <div><dt>Total infracciones</dt><dd id="reportTotal">0</dd></div>
+                  <div><dt>Pagadas</dt><dd id="reportPaid">0</dd></div>
+                  <div><dt>Pendientes</dt><dd id="reportPending">0</dd></div>
+                  <div><dt>Recaudación</dt><dd id="reportRevenue">$0.00</dd></div>
+                </dl>
+              </div>
+            </div>
+            <div class="col-lg-8">
+              <div class="panel">
+                <div class="panel-heading">
+                  <h3>Reporte por motivo</h3>
+                  <button id="exportCsvBtn" class="btn btn-outline-primary"><i class="bi bi-download me-2"></i>CSV</button>
+                </div>
+                <div id="reasonReport" class="reason-report"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+      <div id="appToast" class="toast" role="status" aria-live="polite" aria-atomic="true">
+        <div class="toast-header">
+          <strong class="me-auto">SIIE</strong>
+          <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Cerrar"></button>
+        </div>
+        <div class="toast-body"></div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
