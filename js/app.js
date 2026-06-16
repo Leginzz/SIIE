@@ -1,10 +1,18 @@
-import { dataService } from "./firebase-service.js";
+import { dataService } from "./storage-service.js";
 
 const state = {
   user: null,
+  usuarios: [],
   infracciones: [],
   pagos: [],
+  garantias: [],
   selectedSection: "dashboard"
+};
+
+const roleSections = {
+  Administrador: ["dashboard", "captura", "folios", "caja", "pagos", "garantias", "usuarios", "reportes"],
+  Oficial: ["dashboard", "captura", "folios"],
+  Cajero: ["dashboard", "caja", "pagos", "garantias"]
 };
 
 const currency = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -20,10 +28,14 @@ const elements = {
   sidebar: document.querySelector(".sidebar"),
   sectionTitle: document.querySelector("#sectionTitle"),
   currentUser: document.querySelector("#currentUser"),
-  firebaseBadge: document.querySelector("#firebaseBadge"),
+  storageBadge: document.querySelector("#storageBadge"),
   infractionForm: document.querySelector("#infractionForm"),
   cashSearch: document.querySelector("#cashSearch"),
   exportCsvBtn: document.querySelector("#exportCsvBtn"),
+  warrantyForm: document.querySelector("#warrantyForm"),
+  cancelWarrantyEdit: document.querySelector("#cancelWarrantyEdit"),
+  userForm: document.querySelector("#userForm"),
+  cancelUserEdit: document.querySelector("#cancelUserEdit"),
   toast: document.querySelector("#appToast")
 };
 
@@ -34,12 +46,41 @@ const sectionLabels = {
   caja: "Módulo de caja",
   pagos: "Registro de pagos",
   garantias: "Control de garantías",
+  usuarios: "Gestión de usuarios",
   reportes: "Reportes"
 };
 
 function showToast(message) {
   elements.toast.querySelector(".toast-body").textContent = message;
   bootstrap.Toast.getOrCreateInstance(elements.toast).show();
+}
+
+function allowedSections() {
+  return roleSections[state.user?.rol] || [];
+}
+
+function canAccess(section) {
+  return allowedSections().includes(section);
+}
+
+function visibleInfracciones() {
+  if (state.user?.rol === "Oficial") {
+    return state.infracciones.filter((item) => item.agenteUsuario === state.user.usuario);
+  }
+  return state.infracciones;
+}
+
+function visibleGarantias() {
+  const folios = new Set(visibleInfracciones().map((item) => item.folio));
+  return state.user?.rol === "Oficial"
+    ? state.garantias.filter((item) => folios.has(item.folio))
+    : state.garantias;
+}
+
+function setRoleAccess() {
+  document.querySelectorAll("#mainNav [data-section]").forEach((button) => {
+    button.classList.toggle("d-none", !canAccess(button.dataset.section));
+  });
 }
 
 function getTodayFolio() {
@@ -51,17 +92,28 @@ function getTodayFolio() {
 }
 
 function normalizeDate(value) {
-  if (!value) return new Date();
-  if (value.toDate) return value.toDate();
-  return new Date(value);
+  return value ? new Date(value.toDate ? value.toDate() : value) : new Date();
+}
+
+function todayInputValue() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function statusBadge(status) {
-  const className = status === "Pagada" ? "status-pagada" : status === "Cancelada" ? "status-cancelada" : "status-pendiente";
+  const className = status === "Pagada" || status === "Devuelta"
+    ? "status-pagada"
+    : status === "Cancelada"
+      ? "status-cancelada"
+      : "status-pendiente";
   return `<span class="badge-status ${className}">${status}</span>`;
 }
 
 function setSection(section) {
+  if (!canAccess(section)) {
+    showToast("Tu rol no tiene acceso a esta vista.");
+    section = allowedSections()[0] || "dashboard";
+  }
+
   state.selectedSection = section;
   document.querySelectorAll(".section-view").forEach((view) => view.classList.toggle("active", view.id === section));
   document.querySelectorAll("#mainNav .nav-link").forEach((item) => item.classList.toggle("active", item.dataset.section === section));
@@ -70,8 +122,10 @@ function setSection(section) {
 }
 
 async function loadData() {
+  state.usuarios = await dataService.listUsuarios();
   state.infracciones = await dataService.listInfracciones();
   state.pagos = await dataService.listPagos();
+  state.garantias = await dataService.listGarantias();
   renderAll();
 }
 
@@ -81,22 +135,27 @@ function renderAll() {
   renderCaja();
   renderPagos();
   renderGarantias();
+  renderUsuarios();
   renderReportes();
 }
 
 function renderDashboard() {
+  const infracciones = visibleInfracciones();
+  const garantias = visibleGarantias();
   const paidFolios = new Set(state.pagos.map((pago) => pago.folio));
-  const paid = state.infracciones.filter((item) => item.estado === "Pagada" || paidFolios.has(item.folio));
-  const pending = state.infracciones.filter((item) => item.estado !== "Pagada" && !paidFolios.has(item.folio));
-  const warranties = state.infracciones.filter((item) => item.garantia && item.garantia !== "Ninguna" && item.garantiaEstado !== "Liberada");
-  const revenue = state.pagos.reduce((sum, item) => sum + Number(item.importe || 0), 0);
+  const pending = infracciones.filter((item) => item.estado !== "Pagada" && !paidFolios.has(item.folio));
+  const revenue = state.pagos
+    .filter((pago) => state.user?.rol !== "Oficial" || infracciones.some((item) => item.folio === pago.folio))
+    .reduce((sum, item) => sum + Number(item.importe || 0), 0);
 
-  document.querySelector("#metricInfracciones").textContent = state.infracciones.length;
+  document.querySelector("#metricInfracciones").textContent = infracciones.length;
   document.querySelector("#metricPendientes").textContent = pending.length;
   document.querySelector("#metricRecaudado").textContent = currency.format(revenue);
-  document.querySelector("#metricGarantias").textContent = warranties.length;
+  document.querySelector("#metricGarantiasResguardadas").textContent = garantias.filter((item) => item.estado === "Resguardada").length;
+  document.querySelector("#metricGarantiasDisponibles").textContent = garantias.filter((item) => item.estado === "Disponible para devolución").length;
+  document.querySelector("#metricGarantiasDevueltas").textContent = garantias.filter((item) => item.estado === "Devuelta").length;
 
-  document.querySelector("#recentTable").innerHTML = state.infracciones.slice(0, 6).map((item) => `
+  document.querySelector("#recentTable").innerHTML = infracciones.slice(0, 6).map((item) => `
     <tr>
       <td><strong>${item.folio}</strong></td>
       <td>${item.conductor}</td>
@@ -107,7 +166,8 @@ function renderDashboard() {
 }
 
 function renderFolios() {
-  document.querySelector("#folioTable").innerHTML = state.infracciones.map((item) => `
+  const infracciones = visibleInfracciones();
+  document.querySelector("#folioTable").innerHTML = infracciones.map((item) => `
     <tr>
       <td><strong>${item.folio}</strong></td>
       <td>${item.placas}</td>
@@ -122,13 +182,15 @@ function renderFolios() {
 }
 
 function renderQr(id) {
-  const item = state.infracciones.find((record) => record.id === id);
+  const item = visibleInfracciones().find((record) => record.id === id);
+  if (!item) return;
+
   const qrBox = document.querySelector("#qrBox");
   qrBox.innerHTML = "";
   const payload = `${location.origin}${location.pathname}?folio=${encodeURIComponent(item.folio)}`;
   if (!window.QRCode) {
-    qrBox.innerHTML = `<a class="btn btn-outline-primary" href="${payload}" target="_blank" rel="noreferrer">Abrir verificacion</a>`;
-    showToast("La libreria QR no esta disponible; se dejo enlace de verificacion.");
+    qrBox.innerHTML = `<a class="btn btn-outline-primary" href="${payload}" target="_blank" rel="noreferrer">Abrir verificación</a>`;
+    showToast("La librería QR no está disponible; se dejó enlace de verificación.");
     return;
   }
 
@@ -143,7 +205,7 @@ function renderQr(id) {
 
 function renderCaja() {
   const term = elements.cashSearch.value.trim().toLowerCase();
-  const items = state.infracciones.filter((item) => {
+  const items = visibleInfracciones().filter((item) => {
     const haystack = `${item.folio} ${item.placas} ${item.conductor}`.toLowerCase();
     return !term || haystack.includes(term);
   });
@@ -182,7 +244,9 @@ function renderCaja() {
 }
 
 function renderPagos() {
-  document.querySelector("#paymentsTable").innerHTML = state.pagos.map((item) => `
+  const folios = new Set(visibleInfracciones().map((item) => item.folio));
+  const pagos = state.user?.rol === "Oficial" ? state.pagos.filter((item) => folios.has(item.folio)) : state.pagos;
+  document.querySelector("#paymentsTable").innerHTML = pagos.map((item) => `
     <tr>
       <td><strong>${item.recibo}</strong></td>
       <td>${item.folio}</td>
@@ -193,39 +257,71 @@ function renderPagos() {
   `).join("") || emptyRow(5, "Sin pagos registrados");
 }
 
+function renderWarrantyFolioOptions() {
+  const options = visibleInfracciones().map((item) => `<option value="${item.folio}">${item.folio} - ${item.conductor}</option>`);
+  elements.warrantyForm.elements.folio.innerHTML = options.join("") || `<option value="">Sin infracciones disponibles</option>`;
+}
+
 function renderGarantias() {
-  const items = state.infracciones.filter((item) => item.garantia && item.garantia !== "Ninguna");
+  renderWarrantyFolioOptions();
+  const items = visibleGarantias();
   document.querySelector("#warrantyTable").innerHTML = items.map((item) => `
     <tr>
       <td><strong>${item.folio}</strong></td>
-      <td>${item.garantia}</td>
-      <td>${item.conductor}</td>
-      <td>${item.garantiaEstado || "Retenida"}</td>
+      <td>${item.tipo}</td>
+      <td>${item.documento}</td>
+      <td>${item.titular}</td>
+      <td>${statusBadge(item.estado)}</td>
       <td>
-        <button class="btn btn-sm btn-outline-success" data-release="${item.id}" ${item.garantiaEstado === "Liberada" ? "disabled" : ""}>
-          <i class="bi bi-unlock me-1"></i>Liberar
-        </button>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-primary" data-edit-warranty="${item.id}"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-outline-success" data-return-warranty="${item.id}" ${item.estado === "Devuelta" ? "disabled" : ""}><i class="bi bi-unlock"></i></button>
+          <button class="btn btn-outline-danger" data-delete-warranty="${item.id}"><i class="bi bi-trash"></i></button>
+        </div>
       </td>
     </tr>
-  `).join("") || emptyRow(5, "Sin garantías registradas");
+  `).join("") || emptyRow(6, "Sin garantías registradas");
 
-  document.querySelectorAll("[data-release]").forEach((button) => {
-    button.addEventListener("click", () => releaseWarranty(button.dataset.release));
-  });
+  document.querySelectorAll("[data-edit-warranty]").forEach((button) => button.addEventListener("click", () => editWarranty(button.dataset.editWarranty)));
+  document.querySelectorAll("[data-return-warranty]").forEach((button) => button.addEventListener("click", () => returnWarranty(button.dataset.returnWarranty)));
+  document.querySelectorAll("[data-delete-warranty]").forEach((button) => button.addEventListener("click", () => deleteWarranty(button.dataset.deleteWarranty)));
+}
+
+function renderUsuarios() {
+  document.querySelector("#usersTable").innerHTML = state.usuarios.map((item) => `
+    <tr>
+      <td>${item.nombre}</td>
+      <td><strong>${item.usuario}</strong></td>
+      <td>${item.rol}</td>
+      <td>${item.activo ? "Activo" : "Inactivo"}</td>
+      <td>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-primary" data-edit-user="${item.id}"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-outline-danger" data-delete-user="${item.id}" ${item.usuario === state.user?.usuario ? "disabled" : ""}><i class="bi bi-trash"></i></button>
+        </div>
+      </td>
+    </tr>
+  `).join("") || emptyRow(5, "Sin usuarios registrados");
+
+  document.querySelectorAll("[data-edit-user]").forEach((button) => button.addEventListener("click", () => editUser(button.dataset.editUser)));
+  document.querySelectorAll("[data-delete-user]").forEach((button) => button.addEventListener("click", () => deleteUser(button.dataset.deleteUser)));
 }
 
 function renderReportes() {
-  const paid = state.infracciones.filter((item) => item.estado === "Pagada").length;
-  const revenue = state.pagos.reduce((sum, item) => sum + Number(item.importe || 0), 0);
-  const byReason = state.infracciones.reduce((map, item) => {
+  const infracciones = visibleInfracciones();
+  const paid = infracciones.filter((item) => item.estado === "Pagada").length;
+  const revenue = state.pagos
+    .filter((pago) => infracciones.some((item) => item.folio === pago.folio))
+    .reduce((sum, item) => sum + Number(item.importe || 0), 0);
+  const byReason = infracciones.reduce((map, item) => {
     map[item.motivo] = (map[item.motivo] || 0) + 1;
     return map;
   }, {});
   const max = Math.max(1, ...Object.values(byReason));
 
-  document.querySelector("#reportTotal").textContent = state.infracciones.length;
+  document.querySelector("#reportTotal").textContent = infracciones.length;
   document.querySelector("#reportPaid").textContent = paid;
-  document.querySelector("#reportPending").textContent = state.infracciones.length - paid;
+  document.querySelector("#reportPending").textContent = infracciones.length - paid;
   document.querySelector("#reportRevenue").textContent = currency.format(revenue);
   document.querySelector("#reasonReport").innerHTML = Object.entries(byReason).map(([reason, count]) => `
     <div class="reason-row">
@@ -241,7 +337,10 @@ function emptyRow(columns, message) {
 }
 
 async function registerPayment(id) {
-  const item = state.infracciones.find((record) => record.id === id);
+  if (!canAccess("caja")) return showToast("Tu rol no puede registrar pagos.");
+  const item = visibleInfracciones().find((record) => record.id === id);
+  if (!item) return;
+
   const receipt = `REC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(state.pagos.length + 1).padStart(4, "0")}`;
   await dataService.createPago({
     recibo: receipt,
@@ -251,25 +350,83 @@ async function registerPayment(id) {
     fecha: new Date().toISOString()
   });
   await dataService.updateInfraccion(item.id, { estado: "Pagada" });
+  await markWarrantyAvailable(item.folio);
   showToast(`Pago registrado para ${item.folio}.`);
   await loadData();
 }
 
 async function updateInfractionStatus(id, status) {
+  if (!canAccess("caja")) return showToast("Tu rol no puede actualizar infracciones desde caja.");
   await dataService.updateInfraccion(id, { estado: status });
   showToast(`Infracción marcada como ${status.toLowerCase()}.`);
   await loadData();
 }
 
-async function releaseWarranty(id) {
-  await dataService.updateInfraccion(id, { garantiaEstado: "Liberada" });
-  showToast("Garantía liberada correctamente.");
+async function markWarrantyAvailable(folio) {
+  const warranty = state.garantias.find((item) => item.folio === folio && item.estado === "Resguardada");
+  if (warranty) {
+    await dataService.updateGarantia(warranty.id, { estado: "Disponible para devolución" });
+  }
+}
+
+function resetWarrantyForm() {
+  elements.warrantyForm.reset();
+  elements.warrantyForm.elements.id.value = "";
+  elements.warrantyForm.elements.fechaResguardo.value = todayInputValue();
+  document.querySelector("#warrantyFormTitle").textContent = "Nueva garantía";
+  elements.cancelWarrantyEdit.classList.add("d-none");
+}
+
+function editWarranty(id) {
+  const item = state.garantias.find((record) => record.id === id);
+  if (!item) return;
+  Object.entries(item).forEach(([key, value]) => {
+    if (elements.warrantyForm.elements[key]) elements.warrantyForm.elements[key].value = value;
+  });
+  document.querySelector("#warrantyFormTitle").textContent = "Editar garantía";
+  elements.cancelWarrantyEdit.classList.remove("d-none");
+  elements.warrantyForm.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function returnWarranty(id) {
+  await dataService.updateGarantia(id, { estado: "Devuelta", fechaDevolucion: todayInputValue() });
+  showToast("Garantía marcada como devuelta.");
+  await loadData();
+}
+
+async function deleteWarranty(id) {
+  await dataService.deleteGarantia(id);
+  showToast("Garantía eliminada.");
+  await loadData();
+}
+
+function resetUserForm() {
+  elements.userForm.reset();
+  elements.userForm.elements.id.value = "";
+  document.querySelector("#userFormTitle").textContent = "Nuevo usuario";
+  elements.cancelUserEdit.classList.add("d-none");
+}
+
+function editUser(id) {
+  const item = state.usuarios.find((record) => record.id === id);
+  if (!item) return;
+  Object.entries(item).forEach(([key, value]) => {
+    if (elements.userForm.elements[key]) elements.userForm.elements[key].value = String(value);
+  });
+  document.querySelector("#userFormTitle").textContent = "Editar usuario";
+  elements.cancelUserEdit.classList.remove("d-none");
+  elements.userForm.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function deleteUser(id) {
+  await dataService.deleteUsuario(id);
+  showToast("Usuario eliminado.");
   await loadData();
 }
 
 function exportCsv() {
-  const header = ["folio", "fecha", "conductor", "placas", "motivo", "monto", "estado", "garantia"];
-  const rows = state.infracciones.map((item) => header.map((field) => `"${String(item[field] ?? "").replaceAll('"', '""')}"`).join(","));
+  const header = ["folio", "fecha", "conductor", "placas", "motivo", "monto", "estado", "agenteUsuario"];
+  const rows = visibleInfracciones().map((item) => header.map((field) => `"${String(item[field] ?? "").replaceAll('"', '""')}"`).join(","));
   const blob = new Blob([[header.join(","), ...rows].join("\n")], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -290,12 +447,16 @@ elements.loginForm.addEventListener("submit", async (event) => {
   }
 
   state.user = account;
-  elements.currentUser.textContent = `${account.nombre || account.usuario} | ${account.rol || "Usuario"}`;
-  elements.firebaseBadge.textContent = dataService.isFirestoreEnabled ? "Firestore activo" : "Modo demo";
-  elements.firebaseBadge.className = dataService.isFirestoreEnabled ? "badge rounded-pill text-bg-success" : "badge rounded-pill text-bg-warning";
+  elements.currentUser.textContent = `${account.nombre || account.usuario} | ${account.rol}`;
+  elements.storageBadge.textContent = "Modo demo LocalStorage";
+  elements.storageBadge.className = "badge rounded-pill text-bg-warning";
   elements.loginView.classList.add("d-none");
   elements.appView.classList.remove("d-none");
+  setRoleAccess();
   await loadData();
+  resetWarrantyForm();
+  resetUserForm();
+  setSection(allowedSections()[0] || "dashboard");
 });
 
 elements.logoutBtn.addEventListener("click", () => {
@@ -312,16 +473,20 @@ elements.mainNav.addEventListener("click", (event) => {
 elements.menuBtn.addEventListener("click", () => elements.sidebar.classList.toggle("open"));
 elements.cashSearch.addEventListener("input", renderCaja);
 elements.exportCsvBtn.addEventListener("click", exportCsv);
+elements.cancelWarrantyEdit.addEventListener("click", resetWarrantyForm);
+elements.cancelUserEdit.addEventListener("click", resetUserForm);
 
 elements.infractionForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!canAccess("captura")) return showToast("Tu rol no puede crear infracciones.");
+
   const data = Object.fromEntries(new FormData(elements.infractionForm));
   const payload = {
     ...data,
     folio: getTodayFolio(),
     monto: Number(data.monto || 0),
+    agenteUsuario: state.user.usuario,
     estado: "Pendiente",
-    garantiaEstado: data.garantia === "Ninguna" ? "No aplica" : "Retenida",
     fecha: new Date().toISOString()
   };
 
@@ -333,4 +498,44 @@ elements.infractionForm.addEventListener("submit", async (event) => {
   setSection("folios");
   const created = state.infracciones.find((item) => item.folio === payload.folio);
   if (created) renderQr(created.id);
+});
+
+elements.warrantyForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!canAccess("garantias")) return showToast("Tu rol no puede gestionar garantías.");
+
+  const data = Object.fromEntries(new FormData(elements.warrantyForm));
+  if (data.estado === "Devuelta" && !data.fechaDevolucion) data.fechaDevolucion = todayInputValue();
+
+  if (data.id) {
+    await dataService.updateGarantia(data.id, data);
+    showToast("Garantía actualizada.");
+  } else {
+    delete data.id;
+    await dataService.createGarantia(data);
+    showToast("Garantía registrada.");
+  }
+
+  resetWarrantyForm();
+  await loadData();
+});
+
+elements.userForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!canAccess("usuarios")) return showToast("Tu rol no puede gestionar usuarios.");
+
+  const data = Object.fromEntries(new FormData(elements.userForm));
+  data.activo = data.activo === "true";
+
+  if (data.id) {
+    await dataService.updateUsuario(data.id, data);
+    showToast("Usuario actualizado.");
+  } else {
+    delete data.id;
+    await dataService.createUsuario(data);
+    showToast("Usuario registrado.");
+  }
+
+  resetUserForm();
+  await loadData();
 });

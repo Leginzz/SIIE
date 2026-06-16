@@ -33,7 +33,7 @@
             <i class="bi bi-box-arrow-in-right me-2"></i>Ingresar
           </button>
           <div class="alert alert-light border mb-0 small">
-            Demo local: <strong>admin@siie.local</strong> / <strong>admin123</strong>. Al configurar Firebase, el prototipo usa Firestore para infracciones, pagos, garantías, reportes y usuarios.
+            Demo local: <strong>admin@siie.local</strong> / <strong>admin123</strong>, <strong>oficial@siie.local</strong> / <strong>oficial123</strong>, <strong>cajero@siie.local</strong> / <strong>cajero123</strong>. El prototipo usa LocalStorage.
           </div>
         </form>
       </section>
@@ -49,13 +49,14 @@
           </div>
         </div>
         <nav class="nav flex-column gap-1" id="mainNav">
-          <button class="nav-link active" data-section="dashboard"><i class="bi bi-speedometer2"></i><span>Dashboard</span></button>
-          <button class="nav-link" data-section="captura"><i class="bi bi-pencil-square"></i><span>Captura</span></button>
-          <button class="nav-link" data-section="folios"><i class="bi bi-qr-code"></i><span>Folios y QR</span></button>
-          <button class="nav-link" data-section="caja"><i class="bi bi-cash-coin"></i><span>Caja</span></button>
-          <button class="nav-link" data-section="pagos"><i class="bi bi-receipt"></i><span>Pagos</span></button>
-          <button class="nav-link" data-section="garantias"><i class="bi bi-key"></i><span>Garantías</span></button>
-          <button class="nav-link" data-section="reportes"><i class="bi bi-bar-chart-line"></i><span>Reportes</span></button>
+          <button class="nav-link active" data-section="dashboard" data-roles="Administrador,Oficial,Cajero"><i class="bi bi-speedometer2"></i><span>Dashboard</span></button>
+          <button class="nav-link" data-section="captura" data-roles="Administrador,Oficial"><i class="bi bi-pencil-square"></i><span>Captura</span></button>
+          <button class="nav-link" data-section="folios" data-roles="Administrador,Oficial"><i class="bi bi-qr-code"></i><span>Folios y QR</span></button>
+          <button class="nav-link" data-section="caja" data-roles="Administrador,Cajero"><i class="bi bi-cash-coin"></i><span>Caja</span></button>
+          <button class="nav-link" data-section="pagos" data-roles="Administrador,Cajero"><i class="bi bi-receipt"></i><span>Pagos</span></button>
+          <button class="nav-link" data-section="garantias" data-roles="Administrador,Cajero"><i class="bi bi-key"></i><span>Garantías</span></button>
+          <button class="nav-link" data-section="usuarios" data-roles="Administrador"><i class="bi bi-people"></i><span>Usuarios</span></button>
+          <button class="nav-link" data-section="reportes" data-roles="Administrador"><i class="bi bi-bar-chart-line"></i><span>Reportes</span></button>
         </nav>
         <button id="logoutBtn" class="btn btn-outline-light w-100 mt-auto"><i class="bi bi-power me-2"></i>Salir</button>
       </aside>
@@ -68,7 +69,7 @@
             <h2 id="sectionTitle" class="mb-0">Dashboard</h2>
           </div>
           <div class="ms-auto text-end">
-            <span id="firebaseBadge" class="badge rounded-pill text-bg-warning">Modo demo</span>
+            <span id="storageBadge" class="badge rounded-pill text-bg-warning">Modo demo</span>
             <p id="currentUser" class="small text-muted mb-0 mt-1"></p>
           </div>
         </header>
@@ -89,7 +90,15 @@
             </article>
             <article class="metric-card">
               <span><i class="bi bi-key-fill"></i></span>
-              <div><p>Garantías activas</p><strong id="metricGarantias">0</strong></div>
+              <div><p>Garantías resguardadas</p><strong id="metricGarantiasResguardadas">0</strong></div>
+            </article>
+            <article class="metric-card">
+              <span><i class="bi bi-unlock"></i></span>
+              <div><p>Disponibles</p><strong id="metricGarantiasDisponibles">0</strong></div>
+            </article>
+            <article class="metric-card">
+              <span><i class="bi bi-check2-square"></i></span>
+              <div><p>Devueltas</p><strong id="metricGarantiasDevueltas">0</strong></div>
             </article>
           </div>
           <div class="row g-3">
@@ -235,12 +244,112 @@
         </section>
 
         <section id="garantias" class="section-view">
+          <form id="warrantyForm" class="panel mb-3">
+            <div class="panel-heading">
+              <h3 id="warrantyFormTitle">Nueva garantía</h3>
+              <div class="d-flex gap-2">
+                <button id="cancelWarrantyEdit" class="btn btn-outline-secondary d-none" type="button">Cancelar</button>
+                <button class="btn btn-primary" type="submit"><i class="bi bi-save me-2"></i>Guardar</button>
+              </div>
+            </div>
+            <input type="hidden" name="id">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">Folio de infracción</label>
+                <select name="folio" class="form-select" required></select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Tipo</label>
+                <select name="tipo" class="form-select" required>
+                  <option>Licencia</option>
+                  <option>INE</option>
+                  <option>Tarjeta de circulación</option>
+                  <option>Otros</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Número de documento</label>
+                <input name="documento" class="form-control" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Titular</label>
+                <input name="titular" class="form-control" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Fecha de resguardo</label>
+                <input name="fechaResguardo" type="date" class="form-control" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Fecha de devolución</label>
+                <input name="fechaDevolucion" type="date" class="form-control">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Estado</label>
+                <select name="estado" class="form-select" required>
+                  <option>Resguardada</option>
+                  <option>Disponible para devolución</option>
+                  <option>Devuelta</option>
+                </select>
+              </div>
+            </div>
+          </form>
           <div class="panel">
             <div class="panel-heading"><h3>Control de garantías</h3></div>
             <div class="table-responsive">
               <table class="table align-middle">
-                <thead><tr><th>Folio</th><th>Garantía</th><th>Conductor</th><th>Estado</th><th>Acción</th></tr></thead>
+                <thead><tr><th>Folio</th><th>Tipo</th><th>Documento</th><th>Titular</th><th>Estado</th><th>Acciones</th></tr></thead>
                 <tbody id="warrantyTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="usuarios" class="section-view">
+          <form id="userForm" class="panel mb-3">
+            <div class="panel-heading">
+              <h3 id="userFormTitle">Nuevo usuario</h3>
+              <div class="d-flex gap-2">
+                <button id="cancelUserEdit" class="btn btn-outline-secondary d-none" type="button">Cancelar</button>
+                <button class="btn btn-primary" type="submit"><i class="bi bi-save me-2"></i>Guardar</button>
+              </div>
+            </div>
+            <input type="hidden" name="id">
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label">Nombre</label>
+                <input name="nombre" class="form-control" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Usuario</label>
+                <input name="usuario" type="email" class="form-control" required>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Contraseña</label>
+                <input name="password" class="form-control" required>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Rol</label>
+                <select name="rol" class="form-select" required>
+                  <option>Administrador</option>
+                  <option>Oficial</option>
+                  <option>Cajero</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Estado</label>
+                <select name="activo" class="form-select">
+                  <option value="true">Activo</option>
+                  <option value="false">Inactivo</option>
+                </select>
+              </div>
+            </div>
+          </form>
+          <div class="panel">
+            <div class="panel-heading"><h3>Gestión de usuarios</h3></div>
+            <div class="table-responsive">
+              <table class="table align-middle">
+                <thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead>
+                <tbody id="usersTable"></tbody>
               </table>
             </div>
           </div>
