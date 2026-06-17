@@ -52,3 +52,11 @@ Usuarios demo:
 - Los permisos adicionales por usuario se suman a los permisos del rol base y no reducen permisos existentes.
 - Jefe Administrativo: rol Cajero con permisos extra para reportes y usuarios.
 - Supervisor Operativo: rol Oficial con permiso extra para reportes.
+
+## Catalogo y UMA
+
+- El Administrador puede crear, editar, activar o desactivar infracciones del catalogo.
+- El Administrador puede configurar la UMA vigente.
+- La captura calcula automaticamente el monto como `UMAs x UMA vigente`.
+- Si la infraccion permite descuento, tambien calcula el monto de descuento configurado.
+- La carga inicial del catalogo es editable y debe validarse contra el tabulador oficial municipal vigente antes de uso operativo.

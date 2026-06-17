@@ -33,7 +33,7 @@
             <i class="bi bi-box-arrow-in-right me-2"></i>Ingresar
           </button>
           <div class="alert alert-light border mb-0 small">
-            Demo local: <strong>admin@siie.local</strong> / <strong>admin123</strong>, <strong>oficial@siie.local</strong> / <strong>oficial123</strong>, <strong>cajero@siie.local</strong> / <strong>cajero123</strong>, <strong>auxiliar@siie.local</strong> / <strong>auxiliar123</strong>. El prototipo usa LocalStorage.
+            Demo local: <strong>admin@siie.local</strong> / <strong>admin123</strong>, <strong>oficial@siie.local</strong> / <strong>oficial123</strong>, <strong>cajero@siie.local</strong> / <strong>cajero123</strong>, <strong>auxiliar@siie.local</strong> / <strong>auxiliar123</strong>, <strong>jefe@siie.local</strong> / <strong>jefe123</strong>, <strong>supervisor@siie.local</strong> / <strong>supervisor123</strong>. El prototipo usa LocalStorage.
           </div>
         </form>
       </section>
@@ -56,6 +56,8 @@
           <button class="nav-link" data-section="pagos" data-roles="Administrador,Cajero"><i class="bi bi-receipt"></i><span>Pagos</span></button>
           <button class="nav-link" data-section="garantias" data-roles="Administrador,Cajero"><i class="bi bi-key"></i><span>Garantías</span></button>
           <button class="nav-link" data-section="recolecciones" data-roles="Administrador,Auxiliar Operativo"><i class="bi bi-truck"></i><span>Recolecciones</span></button>
+          <button class="nav-link" data-section="catalogo" data-roles="Administrador"><i class="bi bi-list-check"></i><span>Catálogo</span></button>
+          <button class="nav-link" data-section="configuracion" data-roles="Administrador"><i class="bi bi-gear"></i><span>Configuración</span></button>
           <button class="nav-link" data-section="usuarios" data-roles="Administrador"><i class="bi bi-people"></i><span>Usuarios</span></button>
           <button class="nav-link" data-section="reportes" data-roles="Administrador"><i class="bi bi-bar-chart-line"></i><span>Reportes</span></button>
         </nav>
@@ -168,19 +170,15 @@
                 <input name="vehiculo" class="form-control" placeholder="Marca, línea, color">
               </div>
               <div class="col-md-4">
-                <label class="form-label">Motivo</label>
-                <select name="motivo" class="form-select" required>
-                  <option value="">Seleccionar</option>
-                  <option>Estacionarse en lugar prohibido</option>
-                  <option>No respetar semáforo</option>
-                  <option>Falta de licencia</option>
-                  <option>Exceso de velocidad</option>
-                  <option>Conducir usando teléfono</option>
-                </select>
+                <label class="form-label">Categoría</label>
+                <select name="categoriaCatalogo" class="form-select" required></select>
               </div>
               <div class="col-md-4">
-                <label class="form-label">Monto</label>
-                <input name="monto" type="number" min="0" step="0.01" class="form-control" value="850" required>
+                <label class="form-label">Infracción</label>
+                <select name="infraccionCatalogo" class="form-select" required></select>
+              </div>
+              <div class="col-12">
+                <div id="infractionCatalogPreview" class="catalog-preview"></div>
               </div>
               <div class="col-md-4">
                 <label class="form-label">Agente</label>
@@ -345,6 +343,83 @@
           </div>
         </section>
 
+        <section id="catalogo" class="section-view">
+          <form id="catalogForm" class="panel mb-3">
+            <div class="panel-heading">
+              <h3 id="catalogFormTitle">Nueva infracción del catálogo</h3>
+              <div class="d-flex gap-2">
+                <button id="cancelCatalogEdit" class="btn btn-outline-secondary d-none" type="button">Cancelar</button>
+                <button class="btn btn-primary" type="submit"><i class="bi bi-save me-2"></i>Guardar</button>
+              </div>
+            </div>
+            <input type="hidden" name="id">
+            <div class="row g-3">
+              <div class="col-md-2">
+                <label class="form-label">Código</label>
+                <input name="codigo" class="form-control text-uppercase" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Categoría</label>
+                <input name="categoria" class="form-control text-uppercase" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Descripción</label>
+                <input name="descripcion" class="form-control text-uppercase" required>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Artículo</label>
+                <input name="articulo" class="form-control" required>
+              </div>
+              <div class="col-md-1">
+                <label class="form-label">UMAs</label>
+                <input name="umas" type="number" min="0" step="0.01" class="form-control" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Permite descuento</label>
+                <select name="permiteDescuento" class="form-select">
+                  <option value="true">Sí</option>
+                  <option value="false">No</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Porcentaje descuento</label>
+                <input name="porcentajeDescuento" type="number" min="0" max="100" step="1" class="form-control" value="50">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Estado</label>
+                <select name="activo" class="form-select">
+                  <option value="true">Activa</option>
+                  <option value="false">Inactiva</option>
+                </select>
+              </div>
+            </div>
+          </form>
+          <div class="panel">
+            <div class="panel-heading"><h3>Catálogo de Infracciones</h3></div>
+            <div class="table-responsive">
+              <table class="table align-middle">
+                <thead><tr><th>Código</th><th>Categoría</th><th>Descripción</th><th>Artículo</th><th>UMAs</th><th>Monto</th><th>Descuento</th><th>Estado</th><th>Acciones</th></tr></thead>
+                <tbody id="catalogTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="configuracion" class="section-view">
+          <form id="configForm" class="panel">
+            <div class="panel-heading">
+              <h3>Configuración del sistema</h3>
+              <button class="btn btn-primary" type="submit"><i class="bi bi-save me-2"></i>Guardar</button>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">UMA vigente</label>
+                <input name="umaActual" type="number" min="0" step="0.01" class="form-control" required>
+              </div>
+            </div>
+          </form>
+        </section>
+
         <section id="usuarios" class="section-view">
           <form id="userForm" class="panel mb-3">
             <div class="panel-heading">
@@ -431,6 +506,17 @@
                   <button id="exportCsvBtn" class="btn btn-outline-primary"><i class="bi bi-download me-2"></i>CSV</button>
                 </div>
                 <div id="reasonReport" class="reason-report"></div>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="panel">
+                <div class="panel-heading"><h3>Detalle de infracciones</h3></div>
+                <div class="table-responsive">
+                  <table class="table align-middle">
+                    <thead><tr><th>Folio</th><th>Código</th><th>Descripción</th><th>UMAs</th><th>Monto aplicado</th><th>Descuento</th></tr></thead>
+                    <tbody id="reportDetailTable"></tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>

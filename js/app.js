@@ -6,17 +6,20 @@ const state = {
   infracciones: [],
   pagos: [],
   garantias: [],
+  catalogoInfracciones: [],
+  configuracion: { umaActual: 117.31 },
   selectedSection: "dashboard"
 };
 
 const roleSections = {
-  Administrador: ["dashboard", "captura", "folios", "caja", "pagos", "garantias", "recolecciones", "usuarios", "reportes"],
+  Administrador: ["dashboard", "captura", "folios", "caja", "pagos", "garantias", "recolecciones", "catalogo", "configuracion", "usuarios", "reportes"],
   Oficial: ["dashboard", "captura", "folios"],
   Cajero: ["dashboard", "caja", "pagos", "garantias"],
   "Auxiliar Operativo": ["dashboard", "recolecciones"]
 };
 
-const configurableModules = ["dashboard", "captura", "folios", "caja", "pagos", "garantias", "recolecciones", "usuarios", "reportes"];
+const configurableModules = ["dashboard", "captura", "folios", "caja", "pagos", "garantias", "recolecciones", "usuarios", "reportes", "catalogo", "configuracion"];
+const adminOnlySections = ["catalogo", "configuracion"];
 
 const currency = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 const shortDate = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" });
@@ -35,6 +38,9 @@ const elements = {
   infractionForm: document.querySelector("#infractionForm"),
   cashSearch: document.querySelector("#cashSearch"),
   exportCsvBtn: document.querySelector("#exportCsvBtn"),
+  catalogForm: document.querySelector("#catalogForm"),
+  cancelCatalogEdit: document.querySelector("#cancelCatalogEdit"),
+  configForm: document.querySelector("#configForm"),
   warrantyForm: document.querySelector("#warrantyForm"),
   cancelWarrantyEdit: document.querySelector("#cancelWarrantyEdit"),
   userForm: document.querySelector("#userForm"),
@@ -50,6 +56,8 @@ const sectionLabels = {
   pagos: "Registro de pagos",
   garantias: "Control de garantías",
   recolecciones: "Recolecciones",
+  catalogo: "Catálogo de Infracciones",
+  configuracion: "Configuración",
   usuarios: "Gestión de usuarios",
   reportes: "Reportes"
 };
@@ -66,6 +74,7 @@ function allowedSections() {
 }
 
 function canAccess(section) {
+  if (adminOnlySections.includes(section) && state.user?.rol !== "Administrador") return false;
   return allowedSections().includes(section);
 }
 
@@ -113,6 +122,15 @@ function todayInputValue() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function calculateInfractionAmounts(catalogItem) {
+  const umaActual = Number(state.configuracion.umaActual || 0);
+  const umas = Number(catalogItem?.umas || 0);
+  const monto = Number((umas * umaActual).toFixed(2));
+  const porcentajeDescuento = catalogItem?.permiteDescuento ? Number(catalogItem.porcentajeDescuento || 0) : 0;
+  const montoDescuento = catalogItem?.permiteDescuento ? Number((monto * (porcentajeDescuento / 100)).toFixed(2)) : 0;
+  return { umaActual, umas, monto, porcentajeDescuento, montoDescuento };
+}
+
 function statusBadge(status) {
   const className = status === "Pagada" || status === "Devuelta"
     ? "status-pagada"
@@ -140,6 +158,8 @@ async function loadData() {
   state.infracciones = await dataService.listInfracciones();
   state.pagos = await dataService.listPagos();
   state.garantias = await dataService.listGarantias();
+  state.catalogoInfracciones = await dataService.listCatalogoInfracciones();
+  state.configuracion = await dataService.getConfiguracion();
   renderAll();
 }
 
@@ -150,6 +170,9 @@ function renderAll() {
   renderPagos();
   renderGarantias();
   renderRecolecciones();
+  renderCatalogo();
+  renderConfiguracion();
+  renderCaptureCatalogControls();
   renderUsuarios();
   renderReportes();
 }
@@ -239,12 +262,13 @@ function renderCaja() {
           ${statusBadge(item.estado)}
         </header>
         <p class="mb-1"><strong>Placas:</strong> ${item.placas}</p>
-        <p class="mb-1"><strong>Motivo:</strong> ${item.motivo}</p>
+        <p class="mb-1"><strong>Motivo:</strong> ${item.codigoInfraccion ? `${item.codigoInfraccion} - ` : ""}${item.descripcionInfraccion || item.motivo}</p>
         <p class="fs-5 fw-bold mb-3">${currency.format(Number(item.monto || 0))}</p>
         <div class="d-flex gap-2">
           <button class="btn btn-success flex-fill" data-pay="${item.id}" ${item.estado === "Pagada" ? "disabled" : ""}>
             <i class="bi bi-check2-circle me-1"></i>Cobrar
           </button>
+          ${item.permiteDescuento ? `<button class="btn btn-outline-success" data-pay-discount="${item.id}" ${item.estado === "Pagada" ? "disabled" : ""}>${item.porcentajeDescuento || 0}%</button>` : ""}
           <button class="btn btn-outline-danger" data-cancel="${item.id}" ${item.estado === "Pagada" ? "disabled" : ""}>
             <i class="bi bi-x-circle"></i>
           </button>
@@ -255,6 +279,9 @@ function renderCaja() {
 
   document.querySelectorAll("[data-pay]").forEach((button) => {
     button.addEventListener("click", () => registerPayment(button.dataset.pay));
+  });
+  document.querySelectorAll("[data-pay-discount]").forEach((button) => {
+    button.addEventListener("click", () => registerPayment(button.dataset.payDiscount, true));
   });
   document.querySelectorAll("[data-cancel]").forEach((button) => {
     button.addEventListener("click", () => updateInfractionStatus(button.dataset.cancel, "Cancelada"));
@@ -329,6 +356,78 @@ function renderRecolecciones() {
   document.querySelectorAll("[data-mark-office]").forEach((button) => button.addEventListener("click", () => updateCollectionStatus(button.dataset.markOffice, "Entregada en oficina")));
 }
 
+function renderCatalogo() {
+  document.querySelector("#catalogTable").innerHTML = state.catalogoInfracciones.map((item) => {
+    const amounts = calculateInfractionAmounts(item);
+    return `
+      <tr>
+        <td><strong>${item.codigo}</strong></td>
+        <td>${item.categoria}</td>
+        <td>${item.descripcion}</td>
+        <td>${item.articulo}</td>
+        <td>${item.umas}</td>
+        <td>${currency.format(amounts.monto)}</td>
+        <td>${item.permiteDescuento ? `${item.porcentajeDescuento}% (${currency.format(amounts.montoDescuento)})` : "No aplica"}</td>
+        <td>${item.activo ? "Activa" : "Inactiva"}</td>
+        <td>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-primary" data-edit-catalog="${item.id}"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-outline-secondary" data-toggle-catalog="${item.id}">${item.activo ? "Desactivar" : "Activar"}</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("") || emptyRow(9, "Sin infracciones en catálogo");
+
+  document.querySelectorAll("[data-edit-catalog]").forEach((button) => button.addEventListener("click", () => editCatalogItem(button.dataset.editCatalog)));
+  document.querySelectorAll("[data-toggle-catalog]").forEach((button) => button.addEventListener("click", () => toggleCatalogItem(button.dataset.toggleCatalog)));
+}
+
+function renderConfiguracion() {
+  elements.configForm.elements.umaActual.value = state.configuracion.umaActual;
+}
+
+function renderCaptureCatalogControls() {
+  const activeItems = state.catalogoInfracciones.filter((item) => item.activo);
+  const categories = [...new Set(activeItems.map((item) => item.categoria))].sort();
+  const categorySelect = elements.infractionForm.elements.categoriaCatalogo;
+  const infractionSelect = elements.infractionForm.elements.infraccionCatalogo;
+  const currentCategory = categorySelect.value || categories[0] || "";
+
+  categorySelect.innerHTML = categories.map((category) => `<option value="${category}">${category}</option>`).join("");
+  categorySelect.value = categories.includes(currentCategory) ? currentCategory : categories[0] || "";
+
+  const categoryItems = activeItems.filter((item) => item.categoria === categorySelect.value);
+  const currentInfraction = infractionSelect.value;
+  infractionSelect.innerHTML = categoryItems.map((item) => `<option value="${item.id}">${item.codigo} - ${item.descripcion}</option>`).join("");
+  infractionSelect.value = categoryItems.some((item) => item.id === currentInfraction) ? currentInfraction : categoryItems[0]?.id || "";
+  renderInfractionCatalogPreview();
+}
+
+function selectedCatalogItem() {
+  return state.catalogoInfracciones.find((item) => item.id === elements.infractionForm.elements.infraccionCatalogo.value);
+}
+
+function renderInfractionCatalogPreview() {
+  const item = selectedCatalogItem();
+  const preview = document.querySelector("#infractionCatalogPreview");
+  if (!item) {
+    preview.innerHTML = `<p class="text-muted mb-0">No hay infracciones activas en el catálogo.</p>`;
+    return;
+  }
+
+  const amounts = calculateInfractionAmounts(item);
+  preview.innerHTML = `
+    <div><strong>Código:</strong> ${item.codigo}</div>
+    <div><strong>Descripción:</strong> ${item.descripcion}</div>
+    <div><strong>Artículo:</strong> ${item.articulo}</div>
+    <div><strong>UMAs:</strong> ${item.umas}</div>
+    <div><strong>UMA vigente:</strong> ${currency.format(amounts.umaActual)}</div>
+    <div><strong>Monto normal:</strong> ${currency.format(amounts.monto)}</div>
+    ${item.permiteDescuento ? `<div><strong>Descuento:</strong> ${item.porcentajeDescuento}%</div><div><strong>Monto con descuento:</strong> ${currency.format(amounts.montoDescuento)}</div>` : `<div><strong>Descuento:</strong> No aplica</div>`}
+  `;
+}
+
 function renderUsuarios() {
   document.querySelector("#usersTable").innerHTML = state.usuarios.map((item) => `
     <tr>
@@ -361,7 +460,8 @@ function renderReportes() {
     .filter((pago) => infracciones.some((item) => item.folio === pago.folio))
     .reduce((sum, item) => sum + Number(item.importe || 0), 0);
   const byReason = infracciones.reduce((map, item) => {
-    map[item.motivo] = (map[item.motivo] || 0) + 1;
+    const label = item.codigoInfraccion ? `${item.codigoInfraccion} - ${item.descripcionInfraccion}` : item.motivo;
+    map[label] = (map[label] || 0) + 1;
     return map;
   }, {});
   const max = Math.max(1, ...Object.values(byReason));
@@ -377,26 +477,38 @@ function renderReportes() {
       <span>${count}</span>
     </div>
   `).join("") || `<p class="text-muted mb-0">Sin datos para reportar.</p>`;
+
+  document.querySelector("#reportDetailTable").innerHTML = infracciones.map((item) => `
+    <tr>
+      <td><strong>${item.folio}</strong></td>
+      <td>${item.codigoInfraccion || "N/D"}</td>
+      <td>${item.descripcionInfraccion || item.motivo || "N/D"}</td>
+      <td>${item.umas ?? "N/D"}</td>
+      <td>${currency.format(Number(item.monto || 0))}</td>
+      <td>${item.descuentoAplicado ? `${item.porcentajeDescuento || 0}% (${currency.format(Number(item.montoDescuento || 0))})` : "No aplicado"}</td>
+    </tr>
+  `).join("") || emptyRow(6, "Sin infracciones registradas");
 }
 
 function emptyRow(columns, message) {
   return `<tr><td colspan="${columns}" class="text-muted text-center py-4">${message}</td></tr>`;
 }
 
-async function registerPayment(id) {
+async function registerPayment(id, useDiscount = false) {
   if (!canAccess("caja")) return showToast("Tu rol no puede registrar pagos.");
   const item = visibleInfracciones().find((record) => record.id === id);
   if (!item) return;
+  const importe = useDiscount && item.permiteDescuento ? Number(item.montoDescuento || item.monto || 0) : Number(item.monto || 0);
 
   const receipt = `REC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(state.pagos.length + 1).padStart(4, "0")}`;
   await dataService.createPago({
     recibo: receipt,
     folio: item.folio,
-    metodo: "Efectivo",
-    importe: Number(item.monto || 0),
+    metodo: useDiscount ? "Efectivo con descuento" : "Efectivo",
+    importe,
     fecha: new Date().toISOString()
   });
-  await dataService.updateInfraccion(item.id, { estado: "Pagada" });
+  await dataService.updateInfraccion(item.id, { estado: "Pagada", descuentoAplicado: Boolean(useDiscount && item.permiteDescuento) });
   await markWarrantyAvailable(item.folio);
   showToast(`Pago registrado para ${item.folio}.`);
   await loadData();
@@ -460,6 +572,33 @@ async function deleteWarranty(id) {
   await loadData();
 }
 
+function resetCatalogForm() {
+  elements.catalogForm.reset();
+  elements.catalogForm.elements.id.value = "";
+  elements.catalogForm.elements.porcentajeDescuento.value = 50;
+  document.querySelector("#catalogFormTitle").textContent = "Nueva infracción del catálogo";
+  elements.cancelCatalogEdit.classList.add("d-none");
+}
+
+function editCatalogItem(id) {
+  const item = state.catalogoInfracciones.find((record) => record.id === id);
+  if (!item) return;
+  Object.entries(item).forEach(([key, value]) => {
+    if (elements.catalogForm.elements[key]) elements.catalogForm.elements[key].value = String(value);
+  });
+  document.querySelector("#catalogFormTitle").textContent = "Editar infracción del catálogo";
+  elements.cancelCatalogEdit.classList.remove("d-none");
+  elements.catalogForm.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function toggleCatalogItem(id) {
+  const item = state.catalogoInfracciones.find((record) => record.id === id);
+  if (!item) return;
+  await dataService.updateCatalogoInfraccion(id, { activo: !item.activo });
+  showToast(item.activo ? "Infracción desactivada." : "Infracción activada.");
+  await loadData();
+}
+
 function resetUserForm() {
   elements.userForm.reset();
   elements.userForm.elements.id.value = "";
@@ -492,7 +631,7 @@ async function deleteUser(id) {
 }
 
 function exportCsv() {
-  const header = ["folio", "fecha", "conductor", "placas", "motivo", "monto", "estado", "agenteUsuario"];
+  const header = ["folio", "fecha", "conductor", "placas", "codigoInfraccion", "descripcionInfraccion", "umas", "monto", "descuentoAplicado", "montoDescuento", "estado", "agenteUsuario"];
   const rows = visibleInfracciones().map((item) => header.map((field) => `"${String(item[field] ?? "").replaceAll('"', '""')}"`).join(","));
   const blob = new Blob([[header.join(","), ...rows].join("\n")], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
@@ -521,6 +660,7 @@ elements.loginForm.addEventListener("submit", async (event) => {
   elements.appView.classList.remove("d-none");
   setRoleAccess();
   await loadData();
+  resetCatalogForm();
   resetWarrantyForm();
   resetUserForm();
   setSection(allowedSections()[0] || "dashboard");
@@ -540,6 +680,9 @@ elements.mainNav.addEventListener("click", (event) => {
 elements.menuBtn.addEventListener("click", () => elements.sidebar.classList.toggle("open"));
 elements.cashSearch.addEventListener("input", renderCaja);
 elements.exportCsvBtn.addEventListener("click", exportCsv);
+elements.infractionForm.elements.categoriaCatalogo.addEventListener("change", renderCaptureCatalogControls);
+elements.infractionForm.elements.infraccionCatalogo.addEventListener("change", renderInfractionCatalogPreview);
+elements.cancelCatalogEdit.addEventListener("click", resetCatalogForm);
 elements.cancelWarrantyEdit.addEventListener("click", resetWarrantyForm);
 elements.cancelUserEdit.addEventListener("click", resetUserForm);
 
@@ -555,10 +698,23 @@ elements.infractionForm.addEventListener("submit", async (event) => {
   if (!canAccess("captura")) return showToast("Tu rol no puede crear infracciones.");
 
   const data = Object.fromEntries(new FormData(elements.infractionForm));
+  const catalogItem = selectedCatalogItem();
+  if (!catalogItem) return showToast("Selecciona una infracción activa del catálogo.");
+  const amounts = calculateInfractionAmounts(catalogItem);
   const payload = {
     ...data,
     folio: getTodayFolio(),
-    monto: Number(data.monto || 0),
+    motivo: catalogItem.descripcion,
+    codigoInfraccion: catalogItem.codigo,
+    descripcionInfraccion: catalogItem.descripcion,
+    articulo: catalogItem.articulo,
+    umas: catalogItem.umas,
+    umaVigente: amounts.umaActual,
+    monto: amounts.monto,
+    permiteDescuento: catalogItem.permiteDescuento,
+    porcentajeDescuento: amounts.porcentajeDescuento,
+    montoDescuento: amounts.montoDescuento,
+    descuentoAplicado: false,
     garantia: data.garantiaRetenida === "Sí" ? data.garantia : "Ninguna",
     agenteUsuario: state.user.usuario,
     estado: "Pendiente",
@@ -578,7 +734,6 @@ elements.infractionForm.addEventListener("submit", async (event) => {
     });
   }
   elements.infractionForm.reset();
-  elements.infractionForm.elements.monto.value = 850;
   document.querySelectorAll(".warranty-capture-field").forEach((field) => field.classList.add("d-none"));
   elements.infractionForm.elements.garantiaDocumento.required = false;
   elements.infractionForm.elements.garantiaTitular.required = false;
@@ -606,6 +761,41 @@ elements.warrantyForm.addEventListener("submit", async (event) => {
   }
 
   resetWarrantyForm();
+  await loadData();
+});
+
+elements.catalogForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!canAccess("catalogo")) return showToast("Tu rol no puede gestionar el catálogo.");
+
+  const data = Object.fromEntries(new FormData(elements.catalogForm));
+  data.codigo = data.codigo.trim().toUpperCase();
+  data.categoria = data.categoria.trim().toUpperCase();
+  data.descripcion = data.descripcion.trim().toUpperCase();
+  data.umas = Number(data.umas || 0);
+  data.permiteDescuento = data.permiteDescuento === "true";
+  data.porcentajeDescuento = data.permiteDescuento ? Number(data.porcentajeDescuento || 0) : 0;
+  data.activo = data.activo === "true";
+
+  if (data.id) {
+    await dataService.updateCatalogoInfraccion(data.id, data);
+    showToast("Infracción del catálogo actualizada.");
+  } else {
+    delete data.id;
+    await dataService.createCatalogoInfraccion(data);
+    showToast("Infracción agregada al catálogo.");
+  }
+
+  resetCatalogForm();
+  await loadData();
+});
+
+elements.configForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!canAccess("configuracion")) return showToast("Tu rol no puede modificar configuración.");
+  const data = Object.fromEntries(new FormData(elements.configForm));
+  await dataService.updateConfiguracion({ umaActual: Number(data.umaActual || 0) });
+  showToast("Configuración actualizada.");
   await loadData();
 });
 

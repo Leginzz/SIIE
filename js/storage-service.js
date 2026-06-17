@@ -2,7 +2,9 @@ const localKeys = {
   usuarios: "siie_usuarios",
   infracciones: "siie_infracciones",
   pagos: "siie_pagos",
-  garantias: "siie_garantias"
+  garantias: "siie_garantias",
+  catalogoInfracciones: "siie_catalogo_infracciones",
+  configuracion: "siie_configuracion"
 };
 
 const seedUsuarios = [
@@ -133,6 +135,79 @@ const seedGarantias = [
   }
 ];
 
+const seedCatalogoInfracciones = [
+  {
+    id: "cat-vi-l",
+    codigo: "VI-L",
+    categoria: "CONDUCIR",
+    descripcion: "EXCESO DE VELOCIDAD",
+    articulo: "158 III",
+    umas: 9,
+    permiteDescuento: true,
+    porcentajeDescuento: 50,
+    activo: true
+  },
+  {
+    id: "cat-vi-t",
+    codigo: "VI-T",
+    categoria: "CONDUCIR",
+    descripcion: "CONDUCIR USANDO TELEFONO CELULAR",
+    articulo: "157 IX",
+    umas: 8,
+    permiteDescuento: true,
+    porcentajeDescuento: 50,
+    activo: true
+  },
+  {
+    id: "cat-do-l",
+    codigo: "DO-L",
+    categoria: "DOCUMENTOS",
+    descripcion: "FALTA DE LICENCIA DE CONDUCIR",
+    articulo: "152 I",
+    umas: 10,
+    permiteDescuento: true,
+    porcentajeDescuento: 50,
+    activo: true
+  },
+  {
+    id: "cat-do-tc",
+    codigo: "DO-TC",
+    categoria: "DOCUMENTOS",
+    descripcion: "FALTA DE TARJETA DE CIRCULACION",
+    articulo: "152 II",
+    umas: 7,
+    permiteDescuento: true,
+    porcentajeDescuento: 50,
+    activo: true
+  },
+  {
+    id: "cat-es-p",
+    codigo: "ES-P",
+    categoria: "ESTACIONAMIENTO",
+    descripcion: "ESTACIONARSE EN LUGAR PROHIBIDO",
+    articulo: "164 I",
+    umas: 6,
+    permiteDescuento: true,
+    porcentajeDescuento: 50,
+    activo: true
+  },
+  {
+    id: "cat-se-r",
+    codigo: "SE-R",
+    categoria: "SEMAFOROS Y SENALES",
+    descripcion: "NO RESPETAR LUZ ROJA DEL SEMAFORO",
+    articulo: "160 II",
+    umas: 12,
+    permiteDescuento: false,
+    porcentajeDescuento: 0,
+    activo: true
+  }
+];
+
+const seedConfiguracion = {
+  umaActual: 117.31
+};
+
 function readLocal(key, fallback) {
   const stored = localStorage.getItem(key);
   if (!stored) {
@@ -144,7 +219,7 @@ function readLocal(key, fallback) {
 
 function readMergedLocal(key, fallback) {
   const stored = readLocal(key, fallback);
-  const migrationKey = `${key}_seed_migration_v3`;
+  const migrationKey = `${key}_seed_migration_v4`;
   if (localStorage.getItem(migrationKey)) return stored;
 
   const byId = new Map(stored.map((item) => [item.id, item]));
@@ -194,6 +269,25 @@ function sortByDateDesc(items, field = "fecha") {
   return [...items].sort((a, b) => new Date(b[field] || 0) - new Date(a[field] || 0));
 }
 
+function normalizeCatalogItem(item) {
+  return {
+    ...item,
+    umas: Number(item.umas || 0),
+    permiteDescuento: Boolean(item.permiteDescuento),
+    porcentajeDescuento: Number(item.porcentajeDescuento || 0),
+    activo: item.activo !== false
+  };
+}
+
+function readConfig() {
+  const stored = localStorage.getItem(localKeys.configuracion);
+  if (!stored) {
+    writeLocal(localKeys.configuracion, seedConfiguracion);
+    return structuredClone(seedConfiguracion);
+  }
+  return { ...seedConfiguracion, ...JSON.parse(stored) };
+}
+
 export const dataService = {
   async login(user, password) {
     return readMergedLocal(localKeys.usuarios, seedUsuarios).map(normalizeUser)
@@ -221,6 +315,34 @@ export const dataService = {
   async deleteUsuario(id) {
     const items = readLocal(localKeys.usuarios, seedUsuarios);
     writeLocal(localKeys.usuarios, items.filter((item) => item.id !== id));
+  },
+
+  async listCatalogoInfracciones() {
+    const items = readMergedLocal(localKeys.catalogoInfracciones, seedCatalogoInfracciones).map(normalizeCatalogItem);
+    writeLocal(localKeys.catalogoInfracciones, items);
+    return [...items].sort((a, b) => a.categoria.localeCompare(b.categoria) || a.descripcion.localeCompare(b.descripcion));
+  },
+
+  async createCatalogoInfraccion(payload) {
+    const items = readLocal(localKeys.catalogoInfracciones, seedCatalogoInfracciones);
+    const item = normalizeCatalogItem({ id: createId("catalogo"), activo: true, ...payload });
+    writeLocal(localKeys.catalogoInfracciones, [item, ...items]);
+    return item;
+  },
+
+  async updateCatalogoInfraccion(id, payload) {
+    const items = readLocal(localKeys.catalogoInfracciones, seedCatalogoInfracciones);
+    writeLocal(localKeys.catalogoInfracciones, items.map((item) => (item.id === id ? normalizeCatalogItem({ ...item, ...payload }) : normalizeCatalogItem(item))));
+  },
+
+  async getConfiguracion() {
+    return readConfig();
+  },
+
+  async updateConfiguracion(payload) {
+    const config = { ...readConfig(), ...payload, umaActual: Number(payload.umaActual || 0) };
+    writeLocal(localKeys.configuracion, config);
+    return config;
   },
 
   async listInfracciones() {
