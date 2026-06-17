@@ -60,3 +60,10 @@ Usuarios demo:
 - La captura calcula automaticamente el monto como `UMAs x UMA vigente`.
 - Si la infraccion permite descuento, tambien calcula el monto de descuento configurado.
 - La carga inicial del catalogo es editable y debe validarse contra el tabulador oficial municipal vigente antes de uso operativo.
+
+## Persistencia
+
+- Usuarios, roles y permisos extra permanecen en LocalStorage.
+- Infracciones, pagos, garantias, recolecciones, catalogo y configuracion usan Firestore cuando esta disponible.
+- Si Firestore no esta disponible, el sistema vuelve automaticamente a LocalStorage.
+- Si hay datos locales y Firestore esta vacio, el sistema muestra la opcion `Migrar datos locales a Firestore`.

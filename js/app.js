@@ -35,6 +35,7 @@ const elements = {
   sectionTitle: document.querySelector("#sectionTitle"),
   currentUser: document.querySelector("#currentUser"),
   storageBadge: document.querySelector("#storageBadge"),
+  migrateFirestoreBtn: document.querySelector("#migrateFirestoreBtn"),
   infractionForm: document.querySelector("#infractionForm"),
   cashSearch: document.querySelector("#cashSearch"),
   exportCsvBtn: document.querySelector("#exportCsvBtn"),
@@ -65,6 +66,14 @@ const sectionLabels = {
 function showToast(message) {
   elements.toast.querySelector(".toast-body").textContent = message;
   bootstrap.Toast.getOrCreateInstance(elements.toast).show();
+}
+
+function renderStorageStatus(status = dataService.getStorageStatus()) {
+  elements.storageBadge.textContent = status.label;
+  elements.storageBadge.className = status.mode === "firestore"
+    ? "badge rounded-pill text-bg-success"
+    : "badge rounded-pill text-bg-warning";
+  elements.migrateFirestoreBtn.classList.toggle("d-none", !(status.mode === "firestore" && status.migrationAvailable));
 }
 
 function allowedSections() {
@@ -154,12 +163,14 @@ function setSection(section) {
 }
 
 async function loadData() {
+  await dataService.initPersistence();
   state.usuarios = await dataService.listUsuarios();
   state.infracciones = await dataService.listInfracciones();
   state.pagos = await dataService.listPagos();
   state.garantias = await dataService.listGarantias();
   state.catalogoInfracciones = await dataService.listCatalogoInfracciones();
   state.configuracion = await dataService.getConfiguracion();
+  renderStorageStatus();
   renderAll();
 }
 
@@ -654,8 +665,6 @@ elements.loginForm.addEventListener("submit", async (event) => {
 
   state.user = account;
   elements.currentUser.textContent = `${account.nombre || account.usuario} | ${account.rol}`;
-  elements.storageBadge.textContent = "Modo demo LocalStorage";
-  elements.storageBadge.className = "badge rounded-pill text-bg-warning";
   elements.loginView.classList.add("d-none");
   elements.appView.classList.remove("d-none");
   setRoleAccess();
@@ -680,6 +689,15 @@ elements.mainNav.addEventListener("click", (event) => {
 elements.menuBtn.addEventListener("click", () => elements.sidebar.classList.toggle("open"));
 elements.cashSearch.addEventListener("input", renderCaja);
 elements.exportCsvBtn.addEventListener("click", exportCsv);
+elements.migrateFirestoreBtn.addEventListener("click", async () => {
+  try {
+    await dataService.migrateLocalToFirestore();
+    showToast("Datos locales migrados a Firestore.");
+    await loadData();
+  } catch (error) {
+    showToast(error.message || "No se pudo migrar a Firestore.");
+  }
+});
 elements.infractionForm.elements.categoriaCatalogo.addEventListener("change", renderCaptureCatalogControls);
 elements.infractionForm.elements.infraccionCatalogo.addEventListener("change", renderInfractionCatalogPreview);
 elements.cancelCatalogEdit.addEventListener("click", resetCatalogForm);
