@@ -12,7 +12,8 @@ const seedUsuarios = [
     usuario: "admin@siie.local",
     password: "admin123",
     rol: "Administrador",
-    activo: true
+    activo: true,
+    permisosExtra: []
   },
   {
     id: "user-oficial",
@@ -20,7 +21,8 @@ const seedUsuarios = [
     usuario: "oficial@siie.local",
     password: "oficial123",
     rol: "Oficial",
-    activo: true
+    activo: true,
+    permisosExtra: []
   },
   {
     id: "user-cajero",
@@ -28,7 +30,8 @@ const seedUsuarios = [
     usuario: "cajero@siie.local",
     password: "cajero123",
     rol: "Cajero",
-    activo: true
+    activo: true,
+    permisosExtra: []
   },
   {
     id: "user-auxiliar",
@@ -36,7 +39,26 @@ const seedUsuarios = [
     usuario: "auxiliar@siie.local",
     password: "auxiliar123",
     rol: "Auxiliar Operativo",
-    activo: true
+    activo: true,
+    permisosExtra: []
+  },
+  {
+    id: "user-jefe-administrativo",
+    nombre: "Jefe Administrativo",
+    usuario: "jefe@siie.local",
+    password: "jefe123",
+    rol: "Cajero",
+    activo: true,
+    permisosExtra: ["reportes", "usuarios"]
+  },
+  {
+    id: "user-supervisor-operativo",
+    nombre: "Supervisor Operativo",
+    usuario: "supervisor@siie.local",
+    password: "supervisor123",
+    rol: "Oficial",
+    activo: true,
+    permisosExtra: ["reportes"]
   }
 ];
 
@@ -122,7 +144,7 @@ function readLocal(key, fallback) {
 
 function readMergedLocal(key, fallback) {
   const stored = readLocal(key, fallback);
-  const migrationKey = `${key}_seed_migration_v2`;
+  const migrationKey = `${key}_seed_migration_v3`;
   if (localStorage.getItem(migrationKey)) return stored;
 
   const byId = new Map(stored.map((item) => [item.id, item]));
@@ -153,6 +175,13 @@ function normalizeWarranty(item) {
   };
 }
 
+function normalizeUser(item) {
+  return {
+    ...item,
+    permisosExtra: Array.isArray(item.permisosExtra) ? item.permisosExtra : []
+  };
+}
+
 function writeLocal(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
@@ -167,24 +196,26 @@ function sortByDateDesc(items, field = "fecha") {
 
 export const dataService = {
   async login(user, password) {
-    return readMergedLocal(localKeys.usuarios, seedUsuarios)
+    return readMergedLocal(localKeys.usuarios, seedUsuarios).map(normalizeUser)
       .find((item) => item.usuario === user && item.password === password && item.activo) || null;
   },
 
   async listUsuarios() {
-    return readMergedLocal(localKeys.usuarios, seedUsuarios);
+    const items = readMergedLocal(localKeys.usuarios, seedUsuarios).map(normalizeUser);
+    writeLocal(localKeys.usuarios, items);
+    return items;
   },
 
   async createUsuario(payload) {
     const items = readLocal(localKeys.usuarios, seedUsuarios);
-    const item = { id: createId("usuario"), activo: true, ...payload };
+    const item = normalizeUser({ id: createId("usuario"), activo: true, ...payload });
     writeLocal(localKeys.usuarios, [item, ...items]);
     return item;
   },
 
   async updateUsuario(id, payload) {
     const items = readLocal(localKeys.usuarios, seedUsuarios);
-    writeLocal(localKeys.usuarios, items.map((item) => (item.id === id ? { ...item, ...payload } : item)));
+    writeLocal(localKeys.usuarios, items.map((item) => (item.id === id ? normalizeUser({ ...item, ...payload }) : normalizeUser(item))));
   },
 
   async deleteUsuario(id) {

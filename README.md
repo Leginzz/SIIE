@@ -38,6 +38,10 @@ Usuarios demo:
 - Contrasena: `cajero123`
 - Usuario: `auxiliar@siie.local`
 - Contrasena: `auxiliar123`
+- Usuario: `jefe@siie.local`
+- Contrasena: `jefe123`
+- Usuario: `supervisor@siie.local`
+- Contrasena: `supervisor123`
 
 ## Permisos
 
@@ -45,3 +49,6 @@ Usuarios demo:
 - Oficial: captura infracciones, genera folios y QR, consulta solo sus infracciones.
 - Cajero: consulta infracciones, registra pagos y gestiona devolucion de garantias.
 - Auxiliar Operativo: consulta recolecciones, ve detalles y marca garantias como recogidas o entregadas en oficina.
+- Los permisos adicionales por usuario se suman a los permisos del rol base y no reducen permisos existentes.
+- Jefe Administrativo: rol Cajero con permisos extra para reportes y usuarios.
+- Supervisor Operativo: rol Oficial con permiso extra para reportes.

@@ -16,6 +16,8 @@ const roleSections = {
   "Auxiliar Operativo": ["dashboard", "recolecciones"]
 };
 
+const configurableModules = ["dashboard", "captura", "folios", "caja", "pagos", "garantias", "recolecciones", "usuarios", "reportes"];
+
 const currency = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 const shortDate = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" });
 
@@ -58,7 +60,9 @@ function showToast(message) {
 }
 
 function allowedSections() {
-  return roleSections[state.user?.rol] || [];
+  const basePermissions = roleSections[state.user?.rol] || [];
+  const extraPermissions = Array.isArray(state.user?.permisosExtra) ? state.user.permisosExtra : [];
+  return [...new Set([...basePermissions, ...extraPermissions])].filter((section) => configurableModules.includes(section));
 }
 
 function canAccess(section) {
@@ -331,6 +335,7 @@ function renderUsuarios() {
       <td>${item.nombre}</td>
       <td><strong>${item.usuario}</strong></td>
       <td>${item.rol}</td>
+      <td>${formatExtraPermissions(item.permisosExtra)}</td>
       <td>${item.activo ? "Activo" : "Inactivo"}</td>
       <td>
         <div class="btn-group btn-group-sm">
@@ -339,10 +344,14 @@ function renderUsuarios() {
         </div>
       </td>
     </tr>
-  `).join("") || emptyRow(5, "Sin usuarios registrados");
+  `).join("") || emptyRow(6, "Sin usuarios registrados");
 
   document.querySelectorAll("[data-edit-user]").forEach((button) => button.addEventListener("click", () => editUser(button.dataset.editUser)));
   document.querySelectorAll("[data-delete-user]").forEach((button) => button.addEventListener("click", () => deleteUser(button.dataset.deleteUser)));
+}
+
+function formatExtraPermissions(permisosExtra = []) {
+  return permisosExtra.length ? permisosExtra.join(", ") : "Sin permisos extra";
 }
 
 function renderReportes() {
@@ -454,6 +463,9 @@ async function deleteWarranty(id) {
 function resetUserForm() {
   elements.userForm.reset();
   elements.userForm.elements.id.value = "";
+  elements.userForm.querySelectorAll('input[name="permisosExtra"]').forEach((input) => {
+    input.checked = false;
+  });
   document.querySelector("#userFormTitle").textContent = "Nuevo usuario";
   elements.cancelUserEdit.classList.add("d-none");
 }
@@ -462,7 +474,11 @@ function editUser(id) {
   const item = state.usuarios.find((record) => record.id === id);
   if (!item) return;
   Object.entries(item).forEach(([key, value]) => {
-    if (elements.userForm.elements[key]) elements.userForm.elements[key].value = String(value);
+    if (key !== "permisosExtra" && elements.userForm.elements[key]) elements.userForm.elements[key].value = String(value);
+  });
+  const permisosExtra = new Set(item.permisosExtra || []);
+  elements.userForm.querySelectorAll('input[name="permisosExtra"]').forEach((input) => {
+    input.checked = permisosExtra.has(input.value);
   });
   document.querySelector("#userFormTitle").textContent = "Editar usuario";
   elements.cancelUserEdit.classList.remove("d-none");
@@ -599,6 +615,7 @@ elements.userForm.addEventListener("submit", async (event) => {
 
   const data = Object.fromEntries(new FormData(elements.userForm));
   data.activo = data.activo === "true";
+  data.permisosExtra = new FormData(elements.userForm).getAll("permisosExtra");
 
   if (data.id) {
     await dataService.updateUsuario(data.id, data);

@@ -384,13 +384,27 @@
                   <option value="false">Inactivo</option>
                 </select>
               </div>
+              <div class="col-12">
+                <label class="form-label">Permisos adicionales por módulo</label>
+                <div class="permissions-grid">
+                  <label class="form-check"><input class="form-check-input" type="checkbox" name="permisosExtra" value="dashboard"><span class="form-check-label">Dashboard</span></label>
+                  <label class="form-check"><input class="form-check-input" type="checkbox" name="permisosExtra" value="captura"><span class="form-check-label">Captura</span></label>
+                  <label class="form-check"><input class="form-check-input" type="checkbox" name="permisosExtra" value="folios"><span class="form-check-label">Folios</span></label>
+                  <label class="form-check"><input class="form-check-input" type="checkbox" name="permisosExtra" value="caja"><span class="form-check-label">Caja</span></label>
+                  <label class="form-check"><input class="form-check-input" type="checkbox" name="permisosExtra" value="pagos"><span class="form-check-label">Pagos</span></label>
+                  <label class="form-check"><input class="form-check-input" type="checkbox" name="permisosExtra" value="garantias"><span class="form-check-label">Garantías</span></label>
+                  <label class="form-check"><input class="form-check-input" type="checkbox" name="permisosExtra" value="recolecciones"><span class="form-check-label">Recolecciones</span></label>
+                  <label class="form-check"><input class="form-check-input" type="checkbox" name="permisosExtra" value="usuarios"><span class="form-check-label">Usuarios</span></label>
+                  <label class="form-check"><input class="form-check-input" type="checkbox" name="permisosExtra" value="reportes"><span class="form-check-label">Reportes</span></label>
+                </div>
+              </div>
             </div>
           </form>
           <div class="panel">
             <div class="panel-heading"><h3>Gestión de usuarios</h3></div>
             <div class="table-responsive">
               <table class="table align-middle">
-                <thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead>
+                <thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Permisos extra</th><th>Estado</th><th>Acciones</th></tr></thead>
                 <tbody id="usersTable"></tbody>
               </table>
             </div>
