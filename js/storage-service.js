@@ -17,6 +17,7 @@ const localKeys = {
 };
 
 const firestoreCollections = {
+  usuarios: "usuarios",
   infracciones: "infracciones",
   pagos: "pagos",
   garantias: "garantias",
@@ -309,6 +310,26 @@ async function listRemoteOrLocal({ localKey, fallback, collectionName, normalize
   return sort(localItems);
 }
 
+async function listUsuariosRemoteOrLocal() {
+  const remote = await firestoreList(firestoreCollections.usuarios);
+  if (remote && remote.length > 0) {
+    return remote.map(normalizeUser);
+  }
+
+  const localUsers = readMergedLocal(localKeys.usuarios, seedUsuarios).map(normalizeUser);
+  writeLocal(localKeys.usuarios, localUsers);
+
+  if (firebaseState.available && localUsers.length > 0) {
+    for (const user of localUsers) {
+      const item = normalizeUser({ ...user, id: user.id || createId("usuario") });
+      await firestoreSet(firestoreCollections.usuarios, item.id, item);
+      if (!firebaseState.available) break;
+    }
+  }
+
+  return localUsers;
+}
+
 async function createRemoteOrLocal({ localKey, fallback, collectionName, prefix, payload, normalize = (item) => item }) {
   const normalizedPayload = normalize(payload);
   const remote = await firestoreCreate(collectionName, normalizedPayload);
@@ -391,29 +412,36 @@ export const dataService = {
   },
 
   async login(user, password) {
-    return readMergedLocal(localKeys.usuarios, seedUsuarios).map(normalizeUser)
-      .find((item) => item.usuario === user && item.password === password && item.activo) || null;
+    const users = await this.listUsuarios();
+    return users.find((item) => item.usuario === user && item.password === password && item.activo) || null;
   },
 
   async listUsuarios() {
-    const items = readMergedLocal(localKeys.usuarios, seedUsuarios).map(normalizeUser);
-    writeLocal(localKeys.usuarios, items);
-    return items;
+    return listUsuariosRemoteOrLocal();
   },
 
   async createUsuario(payload) {
-    const items = readLocal(localKeys.usuarios, seedUsuarios);
     const item = normalizeUser({ id: createId("usuario"), activo: true, ...payload });
+    const ok = await firestoreSet(firestoreCollections.usuarios, item.id, item);
+    if (ok) return item;
+
+    const items = readLocal(localKeys.usuarios, seedUsuarios);
     writeLocal(localKeys.usuarios, [item, ...items]);
     return item;
   },
 
   async updateUsuario(id, payload) {
+    const ok = await firestoreSet(firestoreCollections.usuarios, id, normalizeUser({ ...payload, id }));
+    if (ok) return;
+
     const items = readLocal(localKeys.usuarios, seedUsuarios);
     writeLocal(localKeys.usuarios, items.map((item) => (item.id === id ? normalizeUser({ ...item, ...payload }) : normalizeUser(item))));
   },
 
   async deleteUsuario(id) {
+    const ok = await firestoreDelete(firestoreCollections.usuarios, id);
+    if (ok) return;
+
     const items = readLocal(localKeys.usuarios, seedUsuarios);
     writeLocal(localKeys.usuarios, items.filter((item) => item.id !== id));
   },
