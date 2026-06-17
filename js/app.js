@@ -10,9 +10,10 @@ const state = {
 };
 
 const roleSections = {
-  Administrador: ["dashboard", "captura", "folios", "caja", "pagos", "garantias", "usuarios", "reportes"],
+  Administrador: ["dashboard", "captura", "folios", "caja", "pagos", "garantias", "recolecciones", "usuarios", "reportes"],
   Oficial: ["dashboard", "captura", "folios"],
-  Cajero: ["dashboard", "caja", "pagos", "garantias"]
+  Cajero: ["dashboard", "caja", "pagos", "garantias"],
+  "Auxiliar Operativo": ["dashboard", "recolecciones"]
 };
 
 const currency = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -46,6 +47,7 @@ const sectionLabels = {
   caja: "Módulo de caja",
   pagos: "Registro de pagos",
   garantias: "Control de garantías",
+  recolecciones: "Recolecciones",
   usuarios: "Gestión de usuarios",
   reportes: "Reportes"
 };
@@ -72,9 +74,17 @@ function visibleInfracciones() {
 
 function visibleGarantias() {
   const folios = new Set(visibleInfracciones().map((item) => item.folio));
-  return state.user?.rol === "Oficial"
-    ? state.garantias.filter((item) => folios.has(item.folio))
-    : state.garantias;
+  if (state.user?.rol === "Oficial") {
+    return state.garantias.filter((item) => folios.has(item.folio));
+  }
+  if (state.user?.rol === "Auxiliar Operativo") {
+    return state.garantias.filter((item) => isCollectionStatus(item.estado));
+  }
+  return state.garantias;
+}
+
+function isCollectionStatus(status) {
+  return ["Pendiente de recolección", "Recogida", "Entregada en oficina"].includes(status);
 }
 
 function setRoleAccess() {
@@ -135,6 +145,7 @@ function renderAll() {
   renderCaja();
   renderPagos();
   renderGarantias();
+  renderRecolecciones();
   renderUsuarios();
   renderReportes();
 }
@@ -154,6 +165,9 @@ function renderDashboard() {
   document.querySelector("#metricGarantiasResguardadas").textContent = garantias.filter((item) => item.estado === "Resguardada").length;
   document.querySelector("#metricGarantiasDisponibles").textContent = garantias.filter((item) => item.estado === "Disponible para devolución").length;
   document.querySelector("#metricGarantiasDevueltas").textContent = garantias.filter((item) => item.estado === "Devuelta").length;
+  document.querySelector("#metricPendientesRecoleccion").textContent = garantias.filter((item) => item.estado === "Pendiente de recolección").length;
+  document.querySelector("#metricRecogidas").textContent = garantias.filter((item) => item.estado === "Recogida").length;
+  document.querySelector("#metricEntregadasOficina").textContent = garantias.filter((item) => item.estado === "Entregada en oficina").length;
 
   document.querySelector("#recentTable").innerHTML = infracciones.slice(0, 6).map((item) => `
     <tr>
@@ -287,6 +301,30 @@ function renderGarantias() {
   document.querySelectorAll("[data-delete-warranty]").forEach((button) => button.addEventListener("click", () => deleteWarranty(button.dataset.deleteWarranty)));
 }
 
+function renderRecolecciones() {
+  const items = state.garantias.filter((item) => isCollectionStatus(item.estado));
+  document.querySelector("#collectionsTable").innerHTML = items.map((item) => `
+    <tr>
+      <td><strong>${item.folio}</strong></td>
+      <td>${item.tipo}</td>
+      <td>${item.titular}</td>
+      <td>${statusBadge(item.estado)}</td>
+      <td>${item.fechaResguardo || ""}</td>
+      <td>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-primary" data-collect-detail="${item.id}"><i class="bi bi-eye"></i></button>
+          <button class="btn btn-outline-success" data-mark-collected="${item.id}" ${item.estado !== "Pendiente de recolección" ? "disabled" : ""}>Recogida</button>
+          <button class="btn btn-outline-secondary" data-mark-office="${item.id}" ${item.estado === "Entregada en oficina" ? "disabled" : ""}>En oficina</button>
+        </div>
+      </td>
+    </tr>
+  `).join("") || emptyRow(6, "Sin garantías pendientes de recolección");
+
+  document.querySelectorAll("[data-collect-detail]").forEach((button) => button.addEventListener("click", () => showCollectionDetail(button.dataset.collectDetail)));
+  document.querySelectorAll("[data-mark-collected]").forEach((button) => button.addEventListener("click", () => updateCollectionStatus(button.dataset.markCollected, "Recogida")));
+  document.querySelectorAll("[data-mark-office]").forEach((button) => button.addEventListener("click", () => updateCollectionStatus(button.dataset.markOffice, "Entregada en oficina")));
+}
+
 function renderUsuarios() {
   document.querySelector("#usersTable").innerHTML = state.usuarios.map((item) => `
     <tr>
@@ -363,7 +401,7 @@ async function updateInfractionStatus(id, status) {
 }
 
 async function markWarrantyAvailable(folio) {
-  const warranty = state.garantias.find((item) => item.folio === folio && item.estado === "Resguardada");
+  const warranty = state.garantias.find((item) => item.folio === folio && item.estado === "Entregada en oficina");
   if (warranty) {
     await dataService.updateGarantia(warranty.id, { estado: "Disponible para devolución" });
   }
@@ -391,6 +429,19 @@ function editWarranty(id) {
 async function returnWarranty(id) {
   await dataService.updateGarantia(id, { estado: "Devuelta", fechaDevolucion: todayInputValue() });
   showToast("Garantía marcada como devuelta.");
+  await loadData();
+}
+
+function showCollectionDetail(id) {
+  const item = state.garantias.find((record) => record.id === id);
+  if (!item) return;
+  showToast(`${item.folio} | ${item.tipo} | ${item.documento} | ${item.titular} | ${item.estado}`);
+}
+
+async function updateCollectionStatus(id, status) {
+  if (!canAccess("recolecciones")) return showToast("Tu rol no puede actualizar recolecciones.");
+  await dataService.updateGarantia(id, { estado: status });
+  showToast(`Garantía marcada como ${status.toLowerCase()}.`);
   await loadData();
 }
 
@@ -476,6 +527,13 @@ elements.exportCsvBtn.addEventListener("click", exportCsv);
 elements.cancelWarrantyEdit.addEventListener("click", resetWarrantyForm);
 elements.cancelUserEdit.addEventListener("click", resetUserForm);
 
+elements.infractionForm.elements.garantiaRetenida.addEventListener("change", () => {
+  const showWarrantyFields = elements.infractionForm.elements.garantiaRetenida.value === "Sí";
+  document.querySelectorAll(".warranty-capture-field").forEach((field) => field.classList.toggle("d-none", !showWarrantyFields));
+  elements.infractionForm.elements.garantiaDocumento.required = showWarrantyFields;
+  elements.infractionForm.elements.garantiaTitular.required = showWarrantyFields;
+});
+
 elements.infractionForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!canAccess("captura")) return showToast("Tu rol no puede crear infracciones.");
@@ -485,14 +543,29 @@ elements.infractionForm.addEventListener("submit", async (event) => {
     ...data,
     folio: getTodayFolio(),
     monto: Number(data.monto || 0),
+    garantia: data.garantiaRetenida === "Sí" ? data.garantia : "Ninguna",
     agenteUsuario: state.user.usuario,
     estado: "Pendiente",
     fecha: new Date().toISOString()
   };
 
   await dataService.createInfraccion(payload);
+  if (data.garantiaRetenida === "Sí") {
+    await dataService.createGarantia({
+      folio: payload.folio,
+      tipo: data.garantia,
+      documento: data.garantiaDocumento,
+      titular: data.garantiaTitular || data.conductor,
+      fechaResguardo: todayInputValue(),
+      fechaDevolucion: "",
+      estado: "Pendiente de recolección"
+    });
+  }
   elements.infractionForm.reset();
   elements.infractionForm.elements.monto.value = 850;
+  document.querySelectorAll(".warranty-capture-field").forEach((field) => field.classList.add("d-none"));
+  elements.infractionForm.elements.garantiaDocumento.required = false;
+  elements.infractionForm.elements.garantiaTitular.required = false;
   showToast(`Folio ${payload.folio} generado correctamente.`);
   await loadData();
   setSection("folios");

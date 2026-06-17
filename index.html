@@ -33,7 +33,7 @@
             <i class="bi bi-box-arrow-in-right me-2"></i>Ingresar
           </button>
           <div class="alert alert-light border mb-0 small">
-            Demo local: <strong>admin@siie.local</strong> / <strong>admin123</strong>, <strong>oficial@siie.local</strong> / <strong>oficial123</strong>, <strong>cajero@siie.local</strong> / <strong>cajero123</strong>. El prototipo usa LocalStorage.
+            Demo local: <strong>admin@siie.local</strong> / <strong>admin123</strong>, <strong>oficial@siie.local</strong> / <strong>oficial123</strong>, <strong>cajero@siie.local</strong> / <strong>cajero123</strong>, <strong>auxiliar@siie.local</strong> / <strong>auxiliar123</strong>. El prototipo usa LocalStorage.
           </div>
         </form>
       </section>
@@ -49,12 +49,13 @@
           </div>
         </div>
         <nav class="nav flex-column gap-1" id="mainNav">
-          <button class="nav-link active" data-section="dashboard" data-roles="Administrador,Oficial,Cajero"><i class="bi bi-speedometer2"></i><span>Dashboard</span></button>
+          <button class="nav-link active" data-section="dashboard" data-roles="Administrador,Oficial,Cajero,Auxiliar Operativo"><i class="bi bi-speedometer2"></i><span>Dashboard</span></button>
           <button class="nav-link" data-section="captura" data-roles="Administrador,Oficial"><i class="bi bi-pencil-square"></i><span>Captura</span></button>
           <button class="nav-link" data-section="folios" data-roles="Administrador,Oficial"><i class="bi bi-qr-code"></i><span>Folios y QR</span></button>
           <button class="nav-link" data-section="caja" data-roles="Administrador,Cajero"><i class="bi bi-cash-coin"></i><span>Caja</span></button>
           <button class="nav-link" data-section="pagos" data-roles="Administrador,Cajero"><i class="bi bi-receipt"></i><span>Pagos</span></button>
           <button class="nav-link" data-section="garantias" data-roles="Administrador,Cajero"><i class="bi bi-key"></i><span>Garantías</span></button>
+          <button class="nav-link" data-section="recolecciones" data-roles="Administrador,Auxiliar Operativo"><i class="bi bi-truck"></i><span>Recolecciones</span></button>
           <button class="nav-link" data-section="usuarios" data-roles="Administrador"><i class="bi bi-people"></i><span>Usuarios</span></button>
           <button class="nav-link" data-section="reportes" data-roles="Administrador"><i class="bi bi-bar-chart-line"></i><span>Reportes</span></button>
         </nav>
@@ -99,6 +100,18 @@
             <article class="metric-card">
               <span><i class="bi bi-check2-square"></i></span>
               <div><p>Devueltas</p><strong id="metricGarantiasDevueltas">0</strong></div>
+            </article>
+            <article class="metric-card">
+              <span><i class="bi bi-truck"></i></span>
+              <div><p>Pendientes de recolección</p><strong id="metricPendientesRecoleccion">0</strong></div>
+            </article>
+            <article class="metric-card">
+              <span><i class="bi bi-box-seam"></i></span>
+              <div><p>Recogidas</p><strong id="metricRecogidas">0</strong></div>
+            </article>
+            <article class="metric-card">
+              <span><i class="bi bi-building-check"></i></span>
+              <div><p>Entregadas en oficina</p><strong id="metricEntregadasOficina">0</strong></div>
             </article>
           </div>
           <div class="row g-3">
@@ -174,14 +187,28 @@
                 <input name="agente" class="form-control" required>
               </div>
               <div class="col-md-4">
-                <label class="form-label">Garantía retenida</label>
-                <select name="garantia" class="form-select">
-                  <option value="Ninguna">Ninguna</option>
-                  <option>Licencia</option>
-                  <option>Tarjeta de circulación</option>
-                  <option>Placa</option>
-                  <option>Vehículo</option>
+                <label class="form-label">¿Se retuvo una garantía?</label>
+                <select name="garantiaRetenida" class="form-select" required>
+                  <option value="No">No</option>
+                  <option value="Sí">Sí</option>
                 </select>
+              </div>
+              <div class="col-md-4 warranty-capture-field d-none">
+                <label class="form-label">Tipo de garantía</label>
+                <select name="garantia" class="form-select">
+                  <option>Licencia</option>
+                  <option>INE</option>
+                  <option>Tarjeta de circulación</option>
+                  <option>Otros</option>
+                </select>
+              </div>
+              <div class="col-md-4 warranty-capture-field d-none">
+                <label class="form-label">Número de documento</label>
+                <input name="garantiaDocumento" class="form-control">
+              </div>
+              <div class="col-md-4 warranty-capture-field d-none">
+                <label class="form-label">Titular de la garantía</label>
+                <input name="garantiaTitular" class="form-control">
               </div>
               <div class="col-md-4">
                 <label class="form-label">Ubicación</label>
@@ -286,7 +313,9 @@
               <div class="col-md-4">
                 <label class="form-label">Estado</label>
                 <select name="estado" class="form-select" required>
-                  <option>Resguardada</option>
+                  <option>Pendiente de recolección</option>
+                  <option>Recogida</option>
+                  <option>Entregada en oficina</option>
                   <option>Disponible para devolución</option>
                   <option>Devuelta</option>
                 </select>
@@ -299,6 +328,18 @@
               <table class="table align-middle">
                 <thead><tr><th>Folio</th><th>Tipo</th><th>Documento</th><th>Titular</th><th>Estado</th><th>Acciones</th></tr></thead>
                 <tbody id="warrantyTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="recolecciones" class="section-view">
+          <div class="panel">
+            <div class="panel-heading"><h3>Recolecciones de garantías</h3></div>
+            <div class="table-responsive">
+              <table class="table align-middle">
+                <thead><tr><th>Folio</th><th>Tipo</th><th>Titular</th><th>Estado</th><th>Fecha de registro</th><th>Acciones</th></tr></thead>
+                <tbody id="collectionsTable"></tbody>
               </table>
             </div>
           </div>
@@ -333,6 +374,7 @@
                   <option>Administrador</option>
                   <option>Oficial</option>
                   <option>Cajero</option>
+                  <option>Auxiliar Operativo</option>
                 </select>
               </div>
               <div class="col-md-2">

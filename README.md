@@ -12,7 +12,7 @@ Prototipo web estatico para Transito de Tuxpan, listo para publicarse en GitHub 
 - Registro de pagos.
 - Control de garantias.
 - Reportes y exportacion CSV.
-- Sistema de roles: Administrador, Oficial y Cajero.
+- Sistema de roles: Administrador, Oficial, Cajero y Auxiliar Operativo.
 - Gestión local de usuarios.
 - CRUD completo de garantías.
 - Persistencia demo con LocalStorage.
@@ -36,9 +36,12 @@ Usuarios demo:
 - Contrasena: `oficial123`
 - Usuario: `cajero@siie.local`
 - Contrasena: `cajero123`
+- Usuario: `auxiliar@siie.local`
+- Contrasena: `auxiliar123`
 
 ## Permisos
 
 - Administrador: acceso completo, usuarios, reportes y estadisticas.
 - Oficial: captura infracciones, genera folios y QR, consulta solo sus infracciones.
 - Cajero: consulta infracciones, registra pagos y gestiona devolucion de garantias.
+- Auxiliar Operativo: consulta recolecciones, ve detalles y marca garantias como recogidas o entregadas en oficina.

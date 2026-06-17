@@ -29,6 +29,14 @@ const seedUsuarios = [
     password: "cajero123",
     rol: "Cajero",
     activo: true
+  },
+  {
+    id: "user-auxiliar",
+    nombre: "Auxiliar Operativo Demo",
+    usuario: "auxiliar@siie.local",
+    password: "auxiliar123",
+    rol: "Auxiliar Operativo",
+    activo: true
   }
 ];
 
@@ -89,7 +97,7 @@ const seedGarantias = [
     titular: "Mariana Lopez",
     fechaResguardo: "2026-06-15",
     fechaDevolucion: "",
-    estado: "Resguardada"
+    estado: "Pendiente de recolección"
   },
   {
     id: "garantia-demo-2",
@@ -112,6 +120,39 @@ function readLocal(key, fallback) {
   return JSON.parse(stored);
 }
 
+function readMergedLocal(key, fallback) {
+  const stored = readLocal(key, fallback);
+  const migrationKey = `${key}_seed_migration_v2`;
+  if (localStorage.getItem(migrationKey)) return stored;
+
+  const byId = new Map(stored.map((item) => [item.id, item]));
+  fallback.forEach((item) => {
+    if (!byId.has(item.id)) byId.set(item.id, item);
+  });
+  const merged = Array.from(byId.values());
+  writeLocal(key, merged);
+  localStorage.setItem(migrationKey, "true");
+  return merged;
+}
+
+function normalizeWarranty(item) {
+  const stateMap = {
+    Resguardada: "Pendiente de recolección",
+    "Pendiente de recoleccion": "Pendiente de recolección",
+    "Pendiente de recolección": "Pendiente de recolección",
+    Recogida: "Recogida",
+    "Entregada en oficina": "Entregada en oficina",
+    "Disponible para devolución": "Disponible para devolución",
+    "Disponible para devolucion": "Disponible para devolución",
+    Devuelta: "Devuelta"
+  };
+
+  return {
+    ...item,
+    estado: stateMap[item.estado] || item.estado || "Pendiente de recolección"
+  };
+}
+
 function writeLocal(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
@@ -126,12 +167,12 @@ function sortByDateDesc(items, field = "fecha") {
 
 export const dataService = {
   async login(user, password) {
-    return readLocal(localKeys.usuarios, seedUsuarios)
+    return readMergedLocal(localKeys.usuarios, seedUsuarios)
       .find((item) => item.usuario === user && item.password === password && item.activo) || null;
   },
 
   async listUsuarios() {
-    return readLocal(localKeys.usuarios, seedUsuarios);
+    return readMergedLocal(localKeys.usuarios, seedUsuarios);
   },
 
   async createUsuario(payload) {
@@ -179,7 +220,9 @@ export const dataService = {
   },
 
   async listGarantias() {
-    return [...readLocal(localKeys.garantias, seedGarantias)].sort((a, b) => new Date(b.fechaResguardo || 0) - new Date(a.fechaResguardo || 0));
+    const items = readMergedLocal(localKeys.garantias, seedGarantias).map(normalizeWarranty);
+    writeLocal(localKeys.garantias, items);
+    return [...items].sort((a, b) => new Date(b.fechaResguardo || 0) - new Date(a.fechaResguardo || 0));
   },
 
   async createGarantia(payload) {
